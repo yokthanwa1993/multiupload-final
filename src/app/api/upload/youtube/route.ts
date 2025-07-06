@@ -1,39 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { Buffer } from 'buffer';
-import { cookies } from 'next/headers';
 import { Readable } from 'stream';
+import { getAuthenticatedClient } from '../../../lib/youtube-auth';
 
 // This forces the route to be dynamic, which is a good practice for auth-related routes.
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    // Using the same cookie reading method as the working status API route
-    const cookieStore = await cookies();
-    const accessToken = cookieStore.get('youtube_access_token')?.value;
-    const refreshToken = cookieStore.get('youtube_refresh_token')?.value;
-
-    if (!accessToken || !refreshToken) {
-      console.error('YouTube Auth Cookies not found using cookies() in API route.');
-      return NextResponse.json({ error: 'Not authenticated with YouTube. Cookies missing.' }, { status: 401 });
-    }
-
-    // Initialize Google OAuth2 client
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
-    );
-
-    oauth2Client.setCredentials({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-    
-    // The googleapis library automatically handles token refreshing.
-    // We can also listen for the 'tokens' event if we need to save the new token,
-    // but for now, we'll let the library manage it for this request.
+    // Get an authenticated client, which handles tokens automatically
+    const oauth2Client = await getAuthenticatedClient();
     
     // Parse form data
     const formData = await request.formData();
@@ -63,7 +40,7 @@ export async function POST(request: NextRequest) {
       publishAtISO = publishTime.toISOString();
     }
 
-    // Initialize YouTube API
+    // Initialize YouTube API with the authenticated client
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
 
     // Convert video file into a buffer, then a readable stream
@@ -123,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     const videoUrl = `https://www.youtube.com/shorts/${videoId}`;
 
+    // No need to manage cookies or tokens here anymore
     return NextResponse.json({
       success: true,
       videoId: videoId,
@@ -136,19 +114,18 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('YouTube upload error:', error);
     
-    // Handle specific YouTube API errors
+    // Handle specific errors
+    if (error.message.includes('Token file not found') || error.message.includes('Refresh token is missing')) {
+      return NextResponse.json({ error: 'Authentication required. Please connect to YouTube.' }, { status: 401 });
+    }
+
     if (error.response?.data?.error?.message) {
       const errorMessage = error.response.data.error.message;
-      if (errorMessage.includes('expired')) {
-        return NextResponse.json({ error: 'YouTube token has expired. Please reconnect.' }, { status: 401 });
-      }
       return NextResponse.json({ error: `YouTube API Error: ${errorMessage}` }, { status: 400 });
     }
     
-    if (error.code === 401) {
-      return NextResponse.json({ error: 'YouTube authentication expired. Please reconnect.' }, { status: 401 });
-    }
-
-    return NextResponse.json({ error: 'YouTube: ' + (error.message || 'An unknown error occurred') }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'YouTube: ' + (error.message || 'An unknown error occurred') 
+    }, { status: 500 });
   }
 } 

@@ -1,5 +1,9 @@
 import UploadClient from './components/UploadClient';
-import { cookies } from 'next/headers';
+import fs from 'fs';
+import path from 'path';
+
+const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+const TOKEN_PATH = path.join(dataDir, 'token.json');
 
 interface YouTubeChannel {
   name: string;
@@ -21,7 +25,7 @@ async function getYouTubeChannelInfo(accessToken: string): Promise<YouTubeChanne
     if (!response.ok) {
       // If the token is expired/invalid, the API will return an error.
       // We can treat this as not being authenticated for the initial load.
-      console.log('Server-side token validation failed, likely expired.');
+      console.log('Server-side token validation failed during channel fetch.');
       return null;
     }
 
@@ -41,16 +45,25 @@ async function getYouTubeChannelInfo(accessToken: string): Promise<YouTubeChanne
 }
 
 export default async function Home() {
-  const cookieStore = cookies();
-  const accessToken = cookieStore.get('youtube_access_token')?.value;
-  let initialAuthStatus = !!accessToken;
+  let initialAuthStatus = false;
   let initialYoutubeChannel: YouTubeChannel | null = null;
 
-  if (accessToken) {
-    initialYoutubeChannel = await getYouTubeChannelInfo(accessToken);
-    // If fetching info fails, it means the token is invalid, so we are not authenticated.
-    if (!initialYoutubeChannel) {
+  // Read authentication status directly from the token file
+  if (fs.existsSync(TOKEN_PATH)) {
+    try {
+      const tokenData = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
+      if (tokenData.access_token && tokenData.refresh_token) {
+        // Token file exists, now verify the token by fetching channel info
+        initialYoutubeChannel = await getYouTubeChannelInfo(tokenData.access_token);
+        if (initialYoutubeChannel) {
+          initialAuthStatus = true;
+        }
+      }
+    } catch (error) {
+      console.error("Error reading or parsing token.json on server:", error);
+      // If file is corrupt, treat as not authenticated
       initialAuthStatus = false;
+      initialYoutubeChannel = null;
     }
   }
 

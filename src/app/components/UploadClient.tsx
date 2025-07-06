@@ -69,6 +69,12 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
     };
   }, []);
 
+  // This effect will sync the state if the server-side props change
+  useEffect(() => {
+    setAuthStatus({ authenticated: initialAuthStatus });
+    setYoutubeChannel(initialYoutubeChannel);
+  }, [initialAuthStatus, initialYoutubeChannel]);
+
   const handleYouTubeLogin = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if (authStatus.authenticated) {
@@ -122,19 +128,20 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
   };
 
   const handleYouTubeLogout = async () => {
+    setAuthStatus({ authenticated: false });
+    setYoutubeChannel(null);
+
     try {
       const response = await fetch('/api/auth/youtube/status', {
         method: 'DELETE',
       });
       const data = await response.json();
-      if (data.success) {
-        setAuthStatus({ authenticated: false });
-        // NEW: Clear channel info on logout
-        setYoutubeChannel(null);
-        localStorage.removeItem('youtubeChannel');
+      if (!data.success) {
+        // If server fails, maybe show an error, but UI is already updated
+        console.error('Server failed to delete token, but UI is cleared.');
       }
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error('Logout API call failed:', error);
     }
   };
 
