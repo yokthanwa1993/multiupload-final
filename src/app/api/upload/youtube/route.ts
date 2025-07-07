@@ -15,8 +15,11 @@ async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
     if (authorization?.startsWith('Bearer ')) {
         const idToken = authorization.split('Bearer ')[1];
         try {
-            return (await adminAuth.verifyIdToken(idToken)).uid;
-        } catch (error) {
+            if (!adminAuth) throw new Error('Firebase Admin is not initialized');
+            const decodedToken = await adminAuth.verifyIdToken(idToken);
+            return decodedToken.uid;
+        } catch (_error) {
+            console.error("Error verifying ID token in youtube/upload:", _error);
             return null; 
         }
     }
