@@ -82,8 +82,8 @@ export default async function Home() {
   const { isAuthenticated, channelInfo } = await getAuthenticationStatus();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-grid-pattern">
-      <div className="container-wrapper">
+    <main className="min-h-screen flex items-center justify-center p-4">
+      <div className="main-container">
         <UploadClient 
           initialAuthStatus={isAuthenticated} 
           initialYoutubeChannel={channelInfo} 

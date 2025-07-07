@@ -439,11 +439,17 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
                               </div>
                             ) : (
                               <>
-                                <img
-                                  src="/logo.png"
-                                  alt="Page Logo"
-                                  className="logo-image-center"
-                                />
+                                <div className="disconnected-placeholder">
+                                  <div className="disconnected-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                      <circle cx="12" cy="7" r="4"/>
+                                      <line x1="2" y1="2" x2="22" y2="22"/>
+                                    </svg>
+                                  </div>
+                                  <p className="disconnected-text">Not Connected</p>
+                                  <p className="disconnected-subtext">Connect YouTube to see your channel</p>
+                                </div>
                                 <p>Drag & Drop Thumbnail<br/>or click to browse<br/><small style={{ opacity: 0.7 }}>JPG, PNG, GIF supported</small></p>
                               </>
                             )}
