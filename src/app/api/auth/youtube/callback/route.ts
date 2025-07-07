@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { google } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
+import { getAuthenticatedClient } from '@/app/lib/youtube-auth';
 
 // Use the same logic as the auth library to determine the token path
 const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
@@ -19,27 +21,23 @@ export async function GET(request: NextRequest) {
   if (error) {
     console.error('OAuth error:', error);
     return new NextResponse(`
-      <html>
-        <body>
-          <script>
-            window.opener.postMessage({ error: '${error}' }, window.location.origin);
-            window.close();
-          </script>
-        </body>
-      </html>
+      <html><body><script>
+        if (window.opener) {
+          window.opener.postMessage({ error: '${error}' }, window.location.origin);
+        }
+        window.close();
+      </script></body></html>
     `, { headers: { 'Content-Type': 'text/html' } });
   }
 
   if (!code) {
     return new NextResponse(`
-      <html>
-        <body>
-          <script>
-            window.opener.postMessage({ error: 'No authorization code received' }, window.location.origin);
-            window.close();
-          </script>
-        </body>
-      </html>
+      <html><body><script>
+        if (window.opener) {
+          window.opener.postMessage({ error: 'No authorization code received' }, window.location.origin);
+        }
+        window.close();
+      </script></body></html>
     `, { headers: { 'Content-Type': 'text/html' } });
   }
 
@@ -81,19 +79,30 @@ export async function GET(request: NextRequest) {
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
     console.log('Tokens saved to:', TOKEN_PATH);
     
-    // This route no longer sets cookies, it only saves the file.
-    // The client-side will be notified to reload its state.
+    // Get channel information to pass back to the client
+    const oauth2Client = getAuthenticatedClient();
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    const channelRes = await youtube.channels.list({ part: ['snippet'], mine: true });
+    
+    let channelInfo = null;
+    if (channelRes.data.items && channelRes.data.items.length > 0) {
+      const channel = channelRes.data.items[0];
+      channelInfo = {
+        name: channel.snippet?.title,
+        pfp: channel.snippet?.thumbnails?.default?.url,
+      };
+    }
+
     const response = new NextResponse(`
-      <html>
-        <body>
-          <script>
-            if (window.opener) {
-              window.opener.location.reload();
-            }
-            window.close();
-          </script>
-        </body>
-      </html>
+      <html><body><script>
+        if (window.opener) {
+          window.opener.postMessage({ 
+            auth: 'success', 
+            channelInfo: ${JSON.stringify(channelInfo)}
+          }, window.location.origin);
+        }
+        window.close();
+      </script></body></html>
     `, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     
     return response;
@@ -101,14 +110,12 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('OAuth callback error:', error);
     return new NextResponse(`
-      <html>
-        <body>
-          <script>
-            window.opener.postMessage({ error: 'Authentication failed' }, window.location.origin);
-            window.close();
-          </script>
-        </body>
-      </html>
+      <html><body><script>
+        if (window.opener) {
+          window.opener.postMessage({ error: 'Authentication failed' }, window.location.origin);
+        }
+        window.close();
+      </script></body></html>
     `, { headers: { 'Content-Type': 'text/html' } });
   }
 } 

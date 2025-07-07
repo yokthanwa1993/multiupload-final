@@ -40,21 +40,20 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
   const [youtubeChannel, setYoutubeChannel] = useState<YouTubeChannel | null>(initialYoutubeChannel);
 
   useEffect(() => {
-    // This effect is ONLY for handling the OAuth popup message.
     const handleAuthMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      // Ensure the message is from our expected origin
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+      
+      const { auth, channelInfo, error } = event.data;
 
-      const { auth, channelName, channelPfp, error } = event.data;
-
-      if (auth === 'success') {
+      if (auth === 'success' && channelInfo) {
         setAuthStatus({ authenticated: true });
-        if (channelName && channelPfp) {
-          const channelInfo = { name: channelName, pfp: channelPfp };
-          setYoutubeChannel(channelInfo);
-          localStorage.setItem('youtubeChannel', JSON.stringify(channelInfo));
-        }
+        setYoutubeChannel(channelInfo);
+        localStorage.setItem('youtubeChannel', JSON.stringify(channelInfo));
       } else if (error) {
-        console.error('OAuth Error:', error);
+        console.error('OAuth Error received from popup:', error);
         setAuthStatus({ authenticated: false });
         setYoutubeChannel(null);
         localStorage.removeItem('youtubeChannel');
@@ -63,15 +62,13 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
     
     window.addEventListener('message', handleAuthMessage);
 
+    // This effect should also re-sync if the server props change.
+    setAuthStatus({ authenticated: initialAuthStatus });
+    setYoutubeChannel(initialYoutubeChannel);
+
     return () => {
       window.removeEventListener('message', handleAuthMessage);
     };
-  }, []);
-
-  // This effect will sync the state if the server-side props change
-  useEffect(() => {
-    setAuthStatus({ authenticated: initialAuthStatus });
-    setYoutubeChannel(initialYoutubeChannel);
   }, [initialAuthStatus, initialYoutubeChannel]);
 
   const handleYouTubeLogin = (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -127,18 +124,15 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
   };
 
   const handleYouTubeLogout = async () => {
+    // Immediately update UI for responsiveness
     setAuthStatus({ authenticated: false });
     setYoutubeChannel(null);
+    localStorage.removeItem('youtubeChannel');
 
     try {
-      const response = await fetch('/api/auth/youtube/status', {
+      await fetch('/api/auth/youtube/status', {
         method: 'DELETE',
       });
-      const data = await response.json();
-      if (!data.success) {
-        // If server fails, maybe show an error, but UI is already updated
-        console.error('Server failed to delete token, but UI is cleared.');
-      }
     } catch (error) {
       console.error('Logout API call failed:', error);
     }
