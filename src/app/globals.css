@@ -628,10 +628,11 @@ body::before {
 
 .progress-container-inline {
     padding: 1.5rem;
+    margin: 1.5rem;
+    margin-top: 1rem;
     background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(15px);
     border-radius: 16px;
-    margin-top: 1rem;
     animation: slideUp 0.3s ease-out;
 }
 
@@ -902,6 +903,8 @@ body::before {
     
     .progress-container-inline {
         padding: 1rem;
+        margin: 1rem;
+        margin-top: 0.75rem;
     }
     
     .status-bar {
