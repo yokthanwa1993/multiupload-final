@@ -41,17 +41,18 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
 
   useEffect(() => {
     const handleAuthMessage = (event: MessageEvent) => {
-      // Ensure the message is from our expected origin
       if (event.origin !== window.location.origin) {
         return;
       }
       
       const { auth, channelInfo, error } = event.data;
 
-      if (auth === 'success' && channelInfo) {
+      if (auth === 'success') {
         setAuthStatus({ authenticated: true });
-        setYoutubeChannel(channelInfo);
-        localStorage.setItem('youtubeChannel', JSON.stringify(channelInfo));
+        if (channelInfo) {
+          setYoutubeChannel(channelInfo);
+          localStorage.setItem('youtubeChannel', JSON.stringify(channelInfo));
+        }
       } else if (error) {
         console.error('OAuth Error received from popup:', error);
         setAuthStatus({ authenticated: false });
