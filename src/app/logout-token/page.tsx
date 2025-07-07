@@ -9,6 +9,7 @@ async function getFirebaseUser() {
   const sessionCookie = cookieStore.get('session');
   if (!sessionCookie?.value) return null;
   try {
+    if (!adminAuth) throw new Error('Firebase Admin is not initialized');
     return await adminAuth.verifySessionCookie(sessionCookie.value, true);
   } catch (error) {
     console.error("Failed to verify session cookie on logout page:", error);
