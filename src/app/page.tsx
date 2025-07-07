@@ -1,5 +1,6 @@
 import UploadClient from './components/UploadClient';
-import { getAuthenticatedClient, TokenInfo } from './lib/youtube-auth';
+import { getAuthenticatedClient } from './lib/youtube-auth';
+import { google } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
 
@@ -23,16 +24,15 @@ async function getAuthenticationStatus(): Promise<{
 
   try {
     const oauth2Client = getAuthenticatedClient();
-    const youtube = require('googleapis').google.youtube({ version: 'v3', auth: oauth2Client });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
     
     const res = await youtube.channels.list({
-      part: 'snippet',
+      part: ['snippet'],
       mine: true,
     });
 
     if (res.data.items && res.data.items.length > 0) {
       const channel = res.data.items[0];
-      const pfpUrl = channel.snippet?.thumbnails?.default?.url;
       let localPfpPath = '/logo.png';
 
       // Find the most recent profile picture if it exists

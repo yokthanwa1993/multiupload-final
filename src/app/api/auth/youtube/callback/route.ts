@@ -81,50 +81,6 @@ export async function GET(request: NextRequest) {
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
     console.log('Tokens saved to:', TOKEN_PATH);
     
-    // Get channel information
-    const channelResponse = await fetch(
-      'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
-      {
-        headers: {
-          'Authorization': `Bearer ${tokens.access_token}`,
-        },
-      }
-    );
-
-    if (!channelResponse.ok) {
-      throw new Error('Failed to fetch channel information');
-    }
-
-    const channelData = await channelResponse.json();
-    let channelName = 'YouTube Channel';
-    let localProfilePicPath = '/logo.png'; // Default fallback
-
-    if (channelData.items && channelData.items.length > 0) {
-      const channel = channelData.items[0];
-      channelName = channel.snippet.title;
-      
-      // Download profile picture and save locally
-      if (channel.snippet.thumbnails && channel.snippet.thumbnails.default) {
-        try {
-          const profilePicUrl = channel.snippet.thumbnails.default.url;
-          const response = await fetch(profilePicUrl);
-          
-          if (response.ok) {
-            const buffer = await response.arrayBuffer();
-            const fileName = `youtube_profile_${Date.now()}.jpg`;
-            const filePath = path.join(process.cwd(), 'public', fileName);
-            
-            // Save the image to public folder
-            fs.writeFileSync(filePath, Buffer.from(buffer));
-            localProfilePicPath = `/${fileName}`;
-          }
-        } catch (downloadError) {
-          console.error('Failed to download profile picture:', downloadError);
-          // Keep default fallback path
-        }
-      }
-    }
-
     // This route no longer sets cookies, it only saves the file.
     // The client-side will be notified to reload its state.
     const response = new NextResponse(`
