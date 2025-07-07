@@ -1,78 +1,82 @@
 import UploadClient from './components/UploadClient';
+import { getAuthenticatedClient, TokenInfo } from './lib/youtube-auth';
 import fs from 'fs';
 import path from 'path';
-
-const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-const TOKEN_PATH = path.join(dataDir, 'token.json');
 
 interface YouTubeChannel {
   name: string;
   pfp: string;
 }
 
-async function getYouTubeChannelInfo(accessToken: string): Promise<YouTubeChannel | null> {
+// Function to check authentication status on the server-side
+async function getAuthenticationStatus(): Promise<{
+  isAuthenticated: boolean;
+  channelInfo: YouTubeChannel | null;
+}> {
+  const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+  const tokenPath = path.join(dataDir, 'token.json');
+  const pfpDir = path.join(process.cwd(), 'public');
+
+  if (!fs.existsSync(tokenPath)) {
+    return { isAuthenticated: false, channelInfo: null };
+  }
+
   try {
-    const response = await fetch(
-      'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        cache: 'no-store',
+    const oauth2Client = getAuthenticatedClient();
+    const youtube = require('googleapis').google.youtube({ version: 'v3', auth: oauth2Client });
+    
+    const res = await youtube.channels.list({
+      part: 'snippet',
+      mine: true,
+    });
+
+    if (res.data.items && res.data.items.length > 0) {
+      const channel = res.data.items[0];
+      const pfpUrl = channel.snippet?.thumbnails?.default?.url;
+      let localPfpPath = '/logo.png';
+
+      // Find the most recent profile picture if it exists
+      const files = fs.readdirSync(pfpDir);
+      const profilePics = files
+        .filter(file => file.startsWith('youtube_profile_'))
+        .sort((a, b) => {
+          const timeA = parseInt(a.split('_').pop()?.split('.')[0] || '0');
+          const timeB = parseInt(b.split('_').pop()?.split('.')[0] || '0');
+          return timeB - timeA;
+        });
+
+      if (profilePics.length > 0) {
+        localPfpPath = `/${profilePics[0]}`;
       }
-    );
-
-    if (!response.ok) {
-      // If the token is expired/invalid, the API will return an error.
-      // We can treat this as not being authenticated for the initial load.
-      console.log('Server-side token validation failed during channel fetch.');
-      return null;
-    }
-
-    const data = await response.json();
-    if (data.items && data.items.length > 0) {
-      const channel = data.items[0];
+      
       return {
-        name: channel.snippet.title,
-        pfp: channel.snippet.thumbnails.default.url,
+        isAuthenticated: true,
+        channelInfo: {
+          name: channel.snippet?.title || 'YouTube Channel',
+          pfp: localPfpPath,
+        },
       };
     }
-    return null;
+    return { isAuthenticated: true, channelInfo: null }; // Authenticated but couldn't fetch channel
   } catch (error) {
-    console.error('Error fetching channel info on server:', error);
-    return null;
+    console.error('Failed to verify token on server-side:', error);
+    // If token is invalid, delete it to force re-login
+    fs.unlinkSync(tokenPath);
+    return { isAuthenticated: false, channelInfo: null };
   }
 }
 
 export default async function Home() {
-  let initialAuthStatus = false;
-  let initialYoutubeChannel: YouTubeChannel | null = null;
-
-  // Read authentication status directly from the token file
-  if (fs.existsSync(TOKEN_PATH)) {
-    try {
-      const tokenData = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
-      if (tokenData.access_token && tokenData.refresh_token) {
-        // Token file exists, now verify the token by fetching channel info
-        initialYoutubeChannel = await getYouTubeChannelInfo(tokenData.access_token);
-        if (initialYoutubeChannel) {
-          initialAuthStatus = true;
-        }
-      }
-    } catch (error) {
-      console.error("Error reading or parsing token.json on server:", error);
-      // If file is corrupt, treat as not authenticated
-      initialAuthStatus = false;
-      initialYoutubeChannel = null;
-    }
-  }
+  const { isAuthenticated, channelInfo } = await getAuthenticationStatus();
 
   return (
-    <main className="main-container">
-      <UploadClient 
-        initialAuthStatus={initialAuthStatus}
-        initialYoutubeChannel={initialYoutubeChannel}
-      />
+    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-grid-pattern">
+      <div className="container-wrapper">
+        <UploadClient 
+          initialAuthStatus={isAuthenticated} 
+          initialYoutubeChannel={channelInfo} 
+        />
+      </div>
     </main>
   );
 }

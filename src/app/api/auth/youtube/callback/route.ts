@@ -125,11 +125,9 @@ export async function GET(request: NextRequest) {
       <html>
         <body>
           <script>
-            window.opener.postMessage({ 
-              auth: 'success', 
-              channelName: ${JSON.stringify(channelName)},
-              channelPfp: '${localProfilePicPath}'
-            }, window.location.origin);
+            if (window.opener) {
+              window.opener.location.reload();
+            }
             window.close();
           </script>
         </body>
