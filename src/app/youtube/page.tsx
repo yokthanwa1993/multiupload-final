@@ -4,7 +4,13 @@ import { useState, useEffect } from 'react';
 
 interface AuthStatus {
   authenticated: boolean;
-  tokens?: any;
+  tokens?: {
+    access_token: string;
+    refresh_token: string;
+    scope: string;
+    token_type: string;
+    expiry_date: number;
+  };
 }
 
 export default function TestYouTube() {
@@ -208,8 +214,8 @@ export default function TestYouTube() {
         setUploadStatus('');
       }, 8000);
 
-    } catch (error: any) {
-      const errorMessage = error?.message || 'Unknown error';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.log('YouTube upload error:', errorMessage);
       setUploadStatus('❌ อัปโหลดล้มเหลว: ' + errorMessage);
       setIsUploading(false);

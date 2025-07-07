@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Image from "next/image";
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface AuthStatus {
   authenticated: boolean;
@@ -311,9 +311,9 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
           } else {
             throw new Error(ytResult.error || 'YouTube upload failed');
           }
-        } catch (ytError: any) {
-          let ytErrorMessage = ytError.message || 'Unknown error';
-          if (ytError.message && ytError.message.includes('Not authenticated')) {
+        } catch (ytError) {
+          let ytErrorMessage = ytError instanceof Error ? ytError.message : 'Unknown error';
+          if (ytError instanceof Error && ytError.message.includes('Not authenticated')) {
             ytErrorMessage = 'Authentication expired. Please disconnect and reconnect YouTube.';
             setAuthStatus({ authenticated: false });
           }
@@ -343,8 +343,8 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
         // Don't reset uploadResults - keep them visible
       }, 3000);
 
-    } catch (error: any) {
-      setUploadStatus('Upload failed: ' + (error?.message || 'Unknown error'));
+    } catch (error) {
+      setUploadStatus('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
       setIsUploading(false);
       setUploadProgress(0);
     }

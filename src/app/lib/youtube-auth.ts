@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
+import { NextResponse } from 'next/server';
 
 // Use /app/data in production for CapRover persistent storage, otherwise use project root.
 const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
@@ -116,12 +117,9 @@ async function refreshAccessToken(refreshToken: string) {
   }
 }
 
-export function updateTokenCookies(response: Response, accessToken: string, refreshToken?: string) {
-  // Type assertion for NextResponse
-  const nextResponse = response as any;
-  
-  if (nextResponse.cookies && nextResponse.cookies.set) {
-    nextResponse.cookies.set('youtube_access_token', accessToken, {
+export function updateTokenCookies(response: NextResponse, accessToken: string, refreshToken?: string) {
+  if (response.cookies && response.cookies.set) {
+    response.cookies.set('youtube_access_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -129,7 +127,7 @@ export function updateTokenCookies(response: Response, accessToken: string, refr
     });
 
     if (refreshToken) {
-      nextResponse.cookies.set('youtube_refresh_token', refreshToken, {
+      response.cookies.set('youtube_refresh_token', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

@@ -111,21 +111,11 @@ export async function POST(request: NextRequest) {
       publish_at: publishAt || null
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('YouTube upload error:', error);
-    
-    // Handle specific errors
-    if (error.message.includes('Token file not found') || error.message.includes('Refresh token is missing')) {
-      return NextResponse.json({ error: 'Authentication required. Please connect to YouTube.' }, { status: 401 });
-    }
-
-    if (error.response?.data?.error?.message) {
-      const errorMessage = error.response.data.error.message;
-      return NextResponse.json({ error: `YouTube API Error: ${errorMessage}` }, { status: 400 });
-    }
-    
     return NextResponse.json({ 
-      error: 'YouTube: ' + (error.message || 'An unknown error occurred') 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     }, { status: 500 });
   }
 } 

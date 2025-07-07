@@ -75,10 +75,11 @@ export async function POST(request: NextRequest) {
       publish_at: publishAt || null
     });
 
-  } catch (error: any) {
-    console.error('Facebook upload error:', error);
+  } catch (error) {
+    console.error('Error uploading to Facebook:', error);
     return NextResponse.json({ 
-      error: 'เกิดข้อผิดพลาด: ' + error.message 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     }, { status: 500 });
   }
 }
