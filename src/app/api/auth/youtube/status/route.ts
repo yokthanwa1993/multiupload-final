@@ -3,9 +3,6 @@ import fs from 'fs';
 import path from 'path';
 import { adminAuth } from '@/app/lib/firebase-admin';
 
-const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-const TOKEN_PATH = path.join(dataDir, 'token.json');
-
 // Force dynamic execution to prevent caching
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +14,7 @@ async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
             const decodedToken = await adminAuth.verifyIdToken(idToken);
             return decodedToken.uid;
         } catch (error) {
+            console.error("Error verifying ID token in youtube/status:", error);
             return null; // Token is invalid or expired
         }
     }
@@ -30,6 +28,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
+    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
     const tokenPath = path.join(dataDir, `${uid}_youtube_token.json`);
 
     if (fs.existsSync(tokenPath)) {

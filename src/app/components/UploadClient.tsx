@@ -177,7 +177,6 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
     try {
         const idToken = await user.getIdToken();
         const authHeader = { 'Authorization': `Bearer ${idToken}` };
-
         const formData = new FormData();
         formData.append('video', videoFile);
         if (thumbnailFile) formData.append('thumbnail', thumbnailFile);
@@ -185,7 +184,7 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
         formData.append('schedulePost', schedulePost.toString());
         if (publishAt) formData.append('publishAt', publishAt);
 
-        let finalResults: UploadResult[] = [];
+        const finalResults: UploadResult[] = [];
 
         // --- Facebook Upload ---
         if (facebookPage) {
@@ -203,7 +202,7 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
             } else {
                 finalResults.push({ platform: 'facebook', status: 'success', url: fbResult.fb_url });
             }
-            setUploadResults([...finalResults]);
+            setUploadResults(finalResults);
         }
 
         // --- YouTube Upload ---
@@ -221,7 +220,7 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
             } else {
                 finalResults.push({ platform: 'youtube', status: 'success', url: ytResult.yt_url });
             }
-            setUploadResults([...finalResults]);
+            setUploadResults(finalResults);
         }
 
         setUploadProgress(100);

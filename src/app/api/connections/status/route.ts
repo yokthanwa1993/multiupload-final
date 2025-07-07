@@ -38,7 +38,7 @@ async function getYoutubeChannel(uid: string, dataDir: string) {
             pfp: channel.snippet?.thumbnails?.default?.url || '/youtube-logo.png'
         };
     } catch (error) {
-        console.error(`Invalid YouTube token for user ${uid}, deleting.`);
+        console.error(`Invalid YouTube token for user ${uid}, deleting.`, error);
         fs.unlinkSync(tokenPath);
         return null;
     }
@@ -53,7 +53,7 @@ async function getFacebookPage(uid: string, dataDir: string) {
         // A simple validation might be needed here as well in a real app
         return tokenData;
     } catch (error) {
-        console.error(`Invalid Facebook token for user ${uid}, deleting.`);
+        console.error(`Invalid Facebook token for user ${uid}, deleting.`, error);
         fs.unlinkSync(tokenPath);
         return null;
     }

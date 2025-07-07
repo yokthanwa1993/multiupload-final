@@ -36,6 +36,7 @@ export async function DELETE() {
         });
         return response;
     } catch (error) {
+        console.error("Error clearing session:", error);
         return NextResponse.json({ error: 'Failed to clear session.' }, { status: 500 });
     }
 } 

@@ -39,7 +39,7 @@ export default async function FacebookPage() {
             const decodedToken = await adminAuth.verifySessionCookie(sessionCookie.value, true);
             uid = decodedToken.uid;
         } catch (error) {
-            // Invalid cookie, ignore.
+            console.error("Invalid session cookie on Facebook page:", error);
         }
     }
     

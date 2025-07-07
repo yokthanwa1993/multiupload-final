@@ -11,6 +11,7 @@ async function getFirebaseUser() {
   try {
     return await adminAuth.verifySessionCookie(sessionCookie.value, true);
   } catch (error) {
+    console.error("Failed to verify session cookie on logout page:", error);
     return null;
   }
 }

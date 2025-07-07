@@ -164,6 +164,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
+    console.error('Error in YouTube upload POST handler:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

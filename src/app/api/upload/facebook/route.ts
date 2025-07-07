@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     
     const formData = await request.formData();
     const videoFile = formData.get('video') as File;
-    const thumbnailFile = formData.get('thumbnail') as File;
+    const thumbnailFile = formData.get('thumbnail') as File | null;
     const description = formData.get('description') as string || '';
     const schedulePost = formData.get('schedulePost') as string;
     const publishAt = formData.get('publishAt') as string;
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error uploading to Facebook:', error);
+    console.error('Error in Facebook upload POST handler:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
