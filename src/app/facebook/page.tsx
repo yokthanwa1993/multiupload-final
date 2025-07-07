@@ -36,6 +36,7 @@ export default async function FacebookPage() {
 
     if (sessionCookie?.value) {
         try {
+            if (!adminAuth) throw new Error('Firebase Admin is not initialized');
             const decodedToken = await adminAuth.verifySessionCookie(sessionCookie.value, true);
             uid = decodedToken.uid;
         } catch (error) {
