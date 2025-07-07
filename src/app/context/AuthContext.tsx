@@ -16,6 +16,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!auth) {
+            console.log("AuthContext: Firebase auth not initialized");
+            setLoading(false);
+            return;
+        }
+
         console.log("AuthContext: Subscribing to auth state changes...");
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             console.log("AuthContext: onAuthStateChanged fired. User:", user ? user.uid : 'null');

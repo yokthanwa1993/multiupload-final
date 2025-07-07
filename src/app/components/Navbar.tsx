@@ -11,7 +11,9 @@ export default function Navbar() {
     const handleLogout = async () => {
         try {
             // First, sign out from Firebase on the client
-            await signOut(auth);
+            if (auth) {
+                await signOut(auth);
+            }
             // Then, tell our server to clear the session cookie
             await fetch('/api/auth/session', {
                 method: 'DELETE',

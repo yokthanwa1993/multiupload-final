@@ -18,6 +18,11 @@ export default function LoginPage() {
     }, [user, loading, router]);
 
     const handleGoogleSignIn = async () => {
+        if (!auth) {
+            alert("Firebase authentication is not available. Please try again later.");
+            return;
+        }
+
         setIsSigningIn(true);
         const provider = new GoogleAuthProvider();
         try {
