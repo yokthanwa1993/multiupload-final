@@ -18,9 +18,14 @@ async function getAuthenticationStatus(): Promise<{
   const tokenPath = path.join(dataDir, 'token.json');
   const pfpDir = path.join(process.cwd(), 'public');
 
+  console.log(`[SSR] Checking for token at: ${tokenPath}`);
+
   if (!fs.existsSync(tokenPath)) {
+    console.log('[SSR] Token file not found.');
     return { isAuthenticated: false, channelInfo: null };
   }
+
+  console.log('[SSR] Token file found. Attempting to get authenticated client.');
 
   try {
     const oauth2Client = getAuthenticatedClient();
@@ -59,9 +64,14 @@ async function getAuthenticationStatus(): Promise<{
     }
     return { isAuthenticated: true, channelInfo: null }; // Authenticated but couldn't fetch channel
   } catch (error) {
-    console.error('Failed to verify token on server-side:', error);
+    console.error('[SSR] Failed to verify token on server-side:', error);
     // If token is invalid, delete it to force re-login
-    fs.unlinkSync(tokenPath);
+    try {
+      fs.unlinkSync(tokenPath);
+      console.log('[SSR] Invalid token file deleted.');
+    } catch (unlinkError) {
+      console.error('[SSR] Failed to delete invalid token file:', unlinkError);
+    }
     return { isAuthenticated: false, channelInfo: null };
   }
 }
