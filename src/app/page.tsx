@@ -4,6 +4,8 @@ import { google } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 interface YouTubeChannel {
   name: string;
   pfp: string;
