@@ -14,12 +14,28 @@ const serviceAccountPath = fs.existsSync(PROD_SERVICE_ACCOUNT_PATH)
   : SERVICE_ACCOUNT_PATH;
 
 try {
-  if (getApps().length === 0 && fs.existsSync(serviceAccountPath)) {
-    initializeApp({
+  if (getApps().length === 0) {
+    // Try to use environment variable first
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+      const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+      const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      
+      initializeApp({
+        credential: cert(serviceAccount)
+      });
+      console.log("Firebase Admin SDK initialized using environment variable.");
+    } 
+    // Fall back to file-based initialization
+    else if (fs.existsSync(serviceAccountPath)) {
+      initializeApp({
         credential: cert(serviceAccountPath)
-    });
-  } else if(getApps().length === 0) {
-    console.warn("Firebase Admin SDK not initialized. Service account file not found.");
+      });
+      console.log("Firebase Admin SDK initialized using service account file.");
+    } 
+    else {
+      console.warn("Firebase Admin SDK not initialized. No service account found.");
+    }
   }
 } catch (error) {
     console.error("Firebase Admin SDK initialization error:", error);
