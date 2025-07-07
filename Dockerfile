@@ -42,9 +42,9 @@ COPY --from=builder /app/.next/static ./.next/static
 RUN mkdir -p /app/data
 
 # Expose port
-EXPOSE 3000
+EXPOSE 9090
 
-ENV PORT=3000
+ENV PORT=9090
 ENV HOSTNAME="0.0.0.0"
 
 # Start the application
