@@ -1,12 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
-// Facebook API Configuration
-const FACEBOOK_PAGE_ID = '675135025677492';
-const FACEBOOK_PAGE_ACCESS_TOKEN = 'EAAChZCKmUTDcBO4Vv1pFtfMQCehJiA73VA7u1i8le8PvnghlH1A9ejbsU6rL7FCZCcyZA9DusZADmHLdvCZAEeddtFUgK1EuiqvOZCnE4C6WaUQDUw35AzahShrcXGsgebUoZBa6U2gHRDqHZCVCadHM0xjZCztnbiTO2RYlHKHETNzuzgKBulLPt5LouwwTeVe9FKZCSBkEwxjFBMXmqXn7ZCR';
-const FACEBOOK_GRAPH_API_URL = 'https://graph.facebook.com/v19.0/';
+// Function to read the stored Facebook token data
+function getFacebookTokenData() {
+  const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+  const TOKEN_PATH = path.join(dataDir, 'facebook-token.json');
+
+  if (!fs.existsSync(TOKEN_PATH)) {
+    throw new Error('Facebook page not connected. Please connect a page first.');
+  }
+  const tokenData = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
+  
+  if (!tokenData.id || !tokenData.access_token) {
+      throw new Error('Invalid Facebook token file. Please reconnect the page.');
+  }
+
+  return {
+    pageId: tokenData.id,
+    accessToken: tokenData.access_token
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
+    // Get page ID and access token from the stored file
+    const { pageId, accessToken } = getFacebookTokenData();
+
     // Parse form data
     const formData = await request.formData();
     const videoFile = formData.get('video') as File;
@@ -60,6 +80,8 @@ export async function POST(request: NextRequest) {
 
     // Upload to Facebook Reels
     const reelUrl = await uploadToFacebookReel(
+      pageId,
+      accessToken,
       videoBuffer,
       thumbnailBuffer,
       fbDescription,
@@ -85,15 +107,18 @@ export async function POST(request: NextRequest) {
 }
 
 async function uploadToFacebookReel(
+  pageId: string,
+  accessToken: string,
   videoBuffer: Buffer,
   thumbnailBuffer: Buffer | null,
   description: string,
   scheduledTimestamp: number | null = null
 ): Promise<string> {
-  const baseUrl = `${FACEBOOK_GRAPH_API_URL}${FACEBOOK_PAGE_ID}/video_reels`;
+  const FACEBOOK_GRAPH_API_URL = 'https://graph.facebook.com/v19.0/';
+  const baseUrl = `${FACEBOOK_GRAPH_API_URL}${pageId}/video_reels`;
   
   // Step 1a: Initialize upload
-  const initUrl = `${baseUrl}?upload_phase=start&access_token=${FACEBOOK_PAGE_ACCESS_TOKEN}`;
+  const initUrl = `${baseUrl}?upload_phase=start&access_token=${accessToken}`;
   
   const initResponse = await fetch(initUrl, {
     method: 'POST',
@@ -119,7 +144,7 @@ async function uploadToFacebookReel(
   const uploadResponse = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `OAuth ${FACEBOOK_PAGE_ACCESS_TOKEN}`,
+      'Authorization': `OAuth ${accessToken}`,
       'Offset': '0',
       'File_Size': videoBuffer.length.toString(),
       'Content-Type': 'application/octet-stream',
@@ -137,7 +162,7 @@ async function uploadToFacebookReel(
     video_id: videoId,
     upload_phase: 'finish',
     description: description,
-    access_token: FACEBOOK_PAGE_ACCESS_TOKEN,
+    access_token: accessToken,
   });
   
   if (scheduledTimestamp) {
@@ -165,7 +190,7 @@ async function uploadToFacebookReel(
   // Step 2: Wait for processing
   let isReady = false;
   for (let i = 0; i < 24; i++) {
-    const statusUrl = `${FACEBOOK_GRAPH_API_URL}${videoId}?fields=status&access_token=${FACEBOOK_PAGE_ACCESS_TOKEN}`;
+    const statusUrl = `${FACEBOOK_GRAPH_API_URL}${videoId}?fields=status&access_token=${accessToken}`;
     
     const statusResponse = await fetch(statusUrl);
     if (statusResponse.ok) {
@@ -189,7 +214,7 @@ async function uploadToFacebookReel(
     try {
       const thumbnailUrl = `${FACEBOOK_GRAPH_API_URL}${videoId}/thumbnails`;
       const thumbnailFormData = new FormData();
-      thumbnailFormData.append('access_token', FACEBOOK_PAGE_ACCESS_TOKEN);
+      thumbnailFormData.append('access_token', accessToken);
       thumbnailFormData.append('source', new Blob([thumbnailBuffer]), 'thumbnail.jpg');
       thumbnailFormData.append('is_preferred', 'true');
       

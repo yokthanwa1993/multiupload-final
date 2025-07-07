@@ -11,9 +11,17 @@ interface YouTubeChannel {
   pfp: string;
 }
 
+interface FacebookPage {
+  id: string;
+  name: string;
+  access_token: string;
+  category: string;
+}
+
 interface UploadClientProps {
   initialAuthStatus: boolean;
   initialYoutubeChannel: YouTubeChannel | null;
+  initialFacebookPage: FacebookPage | null;
 }
 
 interface UploadResult {
@@ -23,7 +31,7 @@ interface UploadResult {
   message?: string;
 }
 
-export default function UploadClient({ initialAuthStatus, initialYoutubeChannel }: UploadClientProps) {
+export default function UploadClient({ initialAuthStatus, initialYoutubeChannel, initialFacebookPage }: UploadClientProps) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -38,105 +46,59 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
   
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ authenticated: initialAuthStatus });
   const [youtubeChannel, setYoutubeChannel] = useState<YouTubeChannel | null>(initialYoutubeChannel);
+  const [facebookPage, setFacebookPage] = useState<FacebookPage | null>(initialFacebookPage);
 
   useEffect(() => {
-    const handleAuthMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-      
-      const { auth, channelInfo, error } = event.data;
+    const handleMessage = (event: MessageEvent) => {
+      // Ensure the message is from a trusted source if necessary
+      // if (event.origin !== window.location.origin) return;
 
-      if (auth === 'success') {
+      const { data } = event;
+
+      // Handler for YouTube OAuth
+      if (data.auth === 'success' && data.channelInfo) {
         setAuthStatus({ authenticated: true });
-        if (channelInfo) {
-          setYoutubeChannel(channelInfo);
-          localStorage.setItem('youtubeChannel', JSON.stringify(channelInfo));
-        }
-      } else if (error) {
-        console.error('OAuth Error received from popup:', error);
+        setYoutubeChannel(data.channelInfo);
+      } else if (data.error) {
+        console.error('OAuth Error received from popup:', data.error);
         setAuthStatus({ authenticated: false });
         setYoutubeChannel(null);
-        localStorage.removeItem('youtubeChannel');
+      }
+
+      // Handler for Facebook Page Connector
+      if (data.type === 'facebook-connected' && data.page) {
+        setFacebookPage(data.page);
+      } else if (data.type === 'facebook-disconnected') {
+        setFacebookPage(null);
       }
     };
     
-    window.addEventListener('message', handleAuthMessage);
-
-    // This effect should also re-sync if the server props change.
-    setAuthStatus({ authenticated: initialAuthStatus });
-    setYoutubeChannel(initialYoutubeChannel);
+    window.addEventListener('message', handleMessage);
 
     return () => {
-      window.removeEventListener('message', handleAuthMessage);
+      window.removeEventListener('message', handleMessage);
     };
-  }, [initialAuthStatus, initialYoutubeChannel]);
+  }, []); // NOTE: Empty dependency array ensures this runs only once on mount.
 
-  const handleYouTubeLogin = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    if (authStatus.authenticated) {
-      handleYouTubeLogout();
-    } else {
-      const oauthUrl = `/api/auth/youtube?action=login&returnTo=${encodeURIComponent(window.location.pathname)}`;
-      
-      // --- NEW: Center Popup Logic ---
-      const width = 500;
-      const height = 650;
-      // Fallback to screen center if window.top is not available
-      const screenLeft = window.top?.screenX ?? window.screenX;
-      const screenTop = window.top?.screenY ?? window.screenY;
-      const outerWidth = window.top?.outerWidth ?? window.outerWidth;
-      const outerHeight = window.top?.outerHeight ?? window.outerHeight;
-      
-      const left = outerWidth / 2 + screenLeft - (width / 2);
-      const top = outerHeight / 2 + screenTop - (height / 2);
-      
-      const popup = window.open(oauthUrl, '_blank', `width=${width},height=${height},top=${top},left=${left}`);
-      
-      const handleAuthMessage = (event: MessageEvent) => {
-        // Ensure the message is from our expected origin
-        if (event.origin !== window.location.origin) {
-          return;
-        }
-
-        const { auth, channelName, channelPfp, error } = event.data;
-
-        if (auth === 'success') {
-          setAuthStatus({ authenticated: true });
-          if (channelName && channelPfp) {
-            const channelInfo = { name: channelName, pfp: channelPfp };
-            setYoutubeChannel(channelInfo);
-            localStorage.setItem('youtubeChannel', JSON.stringify(channelInfo));
-          }
-        } else if (error) {
-          console.error('OAuth Error:', error);
-          setAuthStatus({ authenticated: false });
-          setYoutubeChannel(null);
-          localStorage.removeItem('youtubeChannel');
-        }
-
-        // Clean up
-        window.removeEventListener('message', handleAuthMessage);
-        if (popup) popup.close();
-      };
-
-      window.addEventListener('message', handleAuthMessage, false);
-    }
+  const handleFacebookConnect = () => {
+    const facebookUrl = '/facebook';
+    const width = 860;
+    const height = 700;
+    const left = (window.screen.width / 2) - (width / 2);
+    const top = (window.screen.height / 2) - (height / 2);
+    window.open(facebookUrl, '_blank', `width=${width},height=${height},top=${top},left=${left}`);
   };
 
-  const handleYouTubeLogout = async () => {
-    // Immediately update UI for responsiveness
-    setAuthStatus({ authenticated: false });
-    setYoutubeChannel(null);
-    localStorage.removeItem('youtubeChannel');
-
-    try {
-      await fetch('/api/auth/youtube/status', {
-        method: 'DELETE',
-      });
-    } catch (error) {
-      console.error('Logout API call failed:', error);
-    }
+  const handleYouTubeLogin = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const oauthUrl = `/api/auth/youtube?action=login&returnTo=${encodeURIComponent(window.location.pathname)}`;
+    
+    const width = 860;
+    const height = 700;
+    const left = (window.screen.width / 2) - (width / 2);
+    const top = (window.screen.height / 2) - (height / 2);
+    
+    window.open(oauthUrl, '_blank', `width=${width},height=${height},top=${top},left=${left}`);
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -346,16 +308,39 @@ export default function UploadClient({ initialAuthStatus, initialYoutubeChannel 
 
   return (
     <>
-        <div className="glass-container">
-            <div className={`status-bar ${authStatus.authenticated ? 'status-online' : 'status-offline'}`}>
-                <span>
-                  {authStatus.authenticated ? 'NEURAL LINK ACTIVE' : 'NEURAL LINK INACTIVE'}
+        <div className="status-bar">
+            {/* Facebook Section */}
+            <div className={`platform-status-container facebook-status ${facebookPage ? 'status-online' : 'status-offline'}`}>
+                <span className="platform-name">
+                  REELS
                 </span>
-                <a href="#" onClick={handleYouTubeLogin}>
-                  {authStatus.authenticated ? 'Disconnect' : 'Connect YouTube'}
-                </a>
+                {!facebookPage && (
+                    <button onClick={handleFacebookConnect} className="connect-link">
+                        Connect
+                    </button>
+                )}
             </div>
 
+            {/* Divider */}
+            <div className="status-divider"></div>
+
+            {/* YouTube Section */}
+            <div className={`platform-status-container youtube-status ${authStatus.authenticated ? 'status-online' : 'status-offline'}`}>
+                <span className="platform-name">
+                  SHORTS
+                </span>
+                {!authStatus.authenticated && (
+                    <button 
+                      onClick={handleYouTubeLogin}
+                      className="connect-link"
+                    >
+                      Connect
+                    </button>
+                )}
+            </div>
+        </div>
+
+        <div className="glass-container">
             {/* Upload Results - Above Form */}
             {uploadResults.length > 0 && (
               <div className="upload-results-top">

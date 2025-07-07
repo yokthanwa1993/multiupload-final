@@ -11,6 +11,13 @@ interface YouTubeChannel {
   pfp: string;
 }
 
+interface FacebookPage {
+  id: string;
+  name:string;
+  access_token: string;
+  category: string;
+}
+
 // Function to check authentication status on the server-side
 async function getAuthenticationStatus(): Promise<{
   isAuthenticated: boolean;
@@ -78,8 +85,47 @@ async function getAuthenticationStatus(): Promise<{
   }
 }
 
+// Function to check Facebook page connection status
+async function getFacebookStatus(): Promise<FacebookPage | null> {
+  const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+  const TOKEN_PATH = path.join(dataDir, 'facebook-token.json');
+
+  if (!fs.existsSync(TOKEN_PATH)) {
+    return null;
+  }
+
+  try {
+    const tokenDataString = fs.readFileSync(TOKEN_PATH, 'utf-8');
+    const tokenData = JSON.parse(tokenDataString);
+
+    if (!tokenData.id || !tokenData.access_token) {
+        throw new Error("Invalid token format");
+    }
+
+    // Validate the token by making a simple API call
+    const validationUrl = `https://graph.facebook.com/v23.0/me?access_token=${tokenData.access_token}`;
+    const response = await fetch(validationUrl);
+    const data = await response.json();
+
+    if (data.error) {
+      // If there's an error, the token is invalid.
+      throw new Error(data.error.message);
+    }
+
+    // If we reach here, the token is valid.
+    return tokenData;
+    
+  } catch (error) {
+    console.error("Facebook token is invalid, deleting file:", error);
+    // If any error occurs (reading, parsing, validation), delete the invalid token file.
+    fs.unlinkSync(TOKEN_PATH);
+    return null;
+  }
+}
+
 export default async function Home() {
   const { isAuthenticated, channelInfo } = await getAuthenticationStatus();
+  const facebookPage = await getFacebookStatus();
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
@@ -87,6 +133,7 @@ export default async function Home() {
         <UploadClient 
           initialAuthStatus={isAuthenticated} 
           initialYoutubeChannel={channelInfo} 
+          initialFacebookPage={facebookPage}
         />
       </div>
     </main>
