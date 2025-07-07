@@ -57,6 +57,7 @@ export default function FacebookManagerClient({ initialSelectedPage }: FacebookM
   const handleSelectPage = async (page: FacebookPage) => {
     setIsLoading(true);
     try {
+      if (!auth) throw new Error("Firebase authentication is not available.");
       const user = auth.currentUser;
       if (!user) throw new Error("User not authenticated.");
       const idToken = await user.getIdToken();
@@ -98,6 +99,7 @@ export default function FacebookManagerClient({ initialSelectedPage }: FacebookM
   const handleDisconnectPage = async () => {
     setIsLoading(true);
     try {
+      if (!auth) throw new Error("Firebase authentication is not available.");
       const user = auth.currentUser;
       if (!user) throw new Error("User not authenticated.");
       const idToken = await user.getIdToken();
