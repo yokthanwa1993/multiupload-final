@@ -110,9 +110,9 @@ export async function POST(request: NextRequest) {
       publish_at: publishAt || null
     });
 
-  } catch (error) {
-    console.error('Error in Facebook upload POST handler:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+  } catch (_error) {
+    console.error('Error in Facebook upload POST handler:', _error);
+    const message = _error instanceof Error ? _error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
