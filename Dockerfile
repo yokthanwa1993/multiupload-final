@@ -29,34 +29,23 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Create nextjs user and group
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
 # Copy public files
 COPY --from=builder /app/public ./public
 
 # Copy standalone build
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder /app/.next/standalone ./
 
 # Copy static files
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/.next/static ./.next/static
 
 # Create data directory for persistent storage
-RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
-
-# Switch to nextjs user
-USER nextjs
+RUN mkdir -p /app/data
 
 # Expose port
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start the application
 CMD ["node", "server.js"] 
