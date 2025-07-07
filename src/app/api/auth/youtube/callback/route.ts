@@ -46,9 +46,9 @@ export async function GET(request: NextRequest) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     if (!baseUrl) {
-      throw new Error("NEXT_PUBLIC_BASE_URL is not defined");
+      throw new Error("NEXT_PUBLIC_BASE_URL is not defined in environment");
     }
-    const redirectUri = `https://${baseUrl.replace(/^https?:\/\//, '')}/api/auth/youtube/callback`;
+    const redirectUri = `${baseUrl}/api/auth/youtube/callback`;
     
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
