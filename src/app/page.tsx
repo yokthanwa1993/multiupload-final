@@ -32,6 +32,11 @@ async function getFirebaseUser() {
   }
   console.log("[SSR] 1.2. Session cookie found.");
 
+  if (!adminAuth) {
+    console.error("Firebase Admin SDK is not initialized. Cannot verify session cookie.");
+    return null;
+  }
+
   try {
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie.value, true);
     console.log(`[SSR] 1.3. Cookie verified for user UID: ${decodedToken.uid}`);
