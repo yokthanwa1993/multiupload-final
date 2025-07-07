@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface AuthStatus {
   authenticated: boolean;
@@ -243,7 +244,7 @@ export default function TestYouTube() {
         <div className="logo-section">
           <h1 className="app-title">🎬 YouTube Shorts Tester</h1>
           <p className="app-subtitle">ทดสอบการอัปโหลดไป YouTube Shorts โดยเฉพาะ</p>
-          <a href="/" style={{ color: '#6366f1', textDecoration: 'none', fontSize: '0.9rem' }}>← กลับหน้าหลัก</a>
+          <Link href="/" style={{ color: '#6366f1', textDecoration: 'none', fontSize: '0.9rem' }}>← กลับหน้าหลัก</Link>
         </div>
 
         <div className="glass-container">

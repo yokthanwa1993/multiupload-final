@@ -1,7 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
 interface AuthStatus {
   authenticated: boolean;
