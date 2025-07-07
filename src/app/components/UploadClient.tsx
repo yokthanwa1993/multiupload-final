@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
+import Image from 'next/image';
 
 // --- Interfaces ---
 interface YouTubeChannel {
@@ -327,11 +328,11 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
             >
                 <div id="image-drop-zone" onClick={() => document.getElementById('thumbnail_file')?.click()}>
                     {thumbnailPreview ? (
-                        <img id="thumbnail-preview" src={thumbnailPreview} alt="Thumbnail Preview" style={{width: '100%', height: '100%', objectFit: 'cover' }}/>
+                        <Image id="thumbnail-preview" src={thumbnailPreview} alt="Thumbnail Preview" fill style={{objectFit: 'cover' }}/>
                     ) : (
                         youtubeChannel ? (
                           <div className="channel-placeholder">
-                            <img src={youtubeChannel.pfp} alt={youtubeChannel.name} className="logo-image-center"/>
+                            <Image src={youtubeChannel.pfp} alt={youtubeChannel.name} className="logo-image-center" width={120} height={120}/>
                             <p className="channel-name">{youtubeChannel.name}</p>
                             <p className="channel-prompt">อัปโหลดภาพปกสำหรับวิดีโอนี้</p>
                           </div>

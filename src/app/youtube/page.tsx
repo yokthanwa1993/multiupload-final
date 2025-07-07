@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface AuthStatus {
   authenticated: boolean;
@@ -266,7 +267,7 @@ export default function TestYouTube() {
             >
               <div id="image-drop-zone" onClick={() => document.getElementById('thumbnail_file')?.click()}>
                 {thumbnailPreview ? (
-                  <img src={thumbnailPreview} alt="Thumbnail Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                  <Image src={thumbnailPreview} alt="Thumbnail Preview" fill style={{ objectFit: 'cover' }}/>
                 ) : (
                   <>
                     <div style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.6 }}>🖼️</div>
