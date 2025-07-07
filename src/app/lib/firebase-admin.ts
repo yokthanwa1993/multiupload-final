@@ -1,24 +1,30 @@
-import { initializeApp, getApps, cert, ServiceAccount } from 'firebase-admin/app';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import fs from 'fs';
+import path from 'path';
 
-// Allow build to pass even if the env variable is missing (for CapRover deploy)
-if (!process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
-    // throw new Error('Firebase service account credentials are not set in .env.local');
-    console.warn('Firebase service account credentials are not set. Some features may not work until you set this in CapRover Environment Variables.');
-}
+const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), 'firebase-service-account.json');
 
-const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64
-    ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('ascii')
-    : '{}';
-const serviceAccount = JSON.parse(serviceAccountString) as ServiceAccount;
+// In production on CapRover, this file will be mounted at /app/data/
+const PROD_SERVICE_ACCOUNT_PATH = '/app/data/firebase-service-account.json';
 
-// Initialize the Firebase Admin SDK if it hasn't been already
-if (getApps().length === 0) {
+const serviceAccountPath = fs.existsSync(PROD_SERVICE_ACCOUNT_PATH)
+  ? PROD_SERVICE_ACCOUNT_PATH
+  : SERVICE_ACCOUNT_PATH;
+
+try {
+  if (getApps().length === 0 && fs.existsSync(serviceAccountPath)) {
     initializeApp({
-        credential: cert(serviceAccount)
+        credential: cert(serviceAccountPath)
     });
+  } else if(getApps().length === 0) {
+    console.warn("Firebase Admin SDK not initialized. Service account file not found.");
+  }
+} catch (error) {
+    console.error("Firebase Admin SDK initialization error:", error);
 }
 
-export const adminAuth = getAuth();
-export const adminDb = getFirestore(); // Export firestore in case we need it later 
+// Export auth and firestore, they will work only if initialization was successful
+export const adminAuth = getApps().length ? getAuth() : null;
+export const adminDb = getApps().length ? getFirestore() : null; 
