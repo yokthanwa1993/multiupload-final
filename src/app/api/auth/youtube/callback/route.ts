@@ -44,6 +44,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const redirectUri = `https://${process.env.NEXT_PUBLIC_BASE_URL!.replace(/^https?:\/\//, '')}/api/auth/youtube/callback`;
+    
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
         client_secret: process.env.GOOGLE_CLIENT_SECRET!,
         code,
         grant_type: 'authorization_code',
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+        redirect_uri: redirectUri,
       }),
     });
 
