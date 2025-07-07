@@ -1122,3 +1122,22 @@ body::before {
 .logout-button:hover {
     background-color: var(--primary);
 }
+
+.hide-until-mounted {
+    visibility: hidden;
+}
+
+.fade-in {
+    animation: fadeInAnimation 0.5s ease-in forwards;
+}
+
+@keyframes fadeInAnimation {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

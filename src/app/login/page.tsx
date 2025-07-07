@@ -35,8 +35,8 @@ export default function LoginPage() {
                 method: 'POST',
                 body: idToken,
             });
-            // 4. Now redirect
-            router.push('/');
+            // 4. Now redirect using a full page navigation to ensure cookie is sent
+            window.location.href = '/';
 
         } catch (error) {
             console.error("Error during Google sign-in:", error);
@@ -48,26 +48,30 @@ export default function LoginPage() {
     if (loading || user) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <p>Loading...</p>
+                <div className="flex flex-col items-center space-y-4">
+                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-white">Loading...</p>
+                </div>
             </div>
         );
     }
 
     return (
         <main className="min-h-screen flex items-center justify-center p-4">
-            <div className="main-container">
-                <div className="glass-container text-center p-12">
-                    <h1 className="app-title mb-4">Welcome</h1>
-                    <p className="app-subtitle mb-8">Please sign in to continue.</p>
-                    <button 
-                        onClick={handleGoogleSignIn} 
-                        className="btn btn-primary w-full max-w-sm mx-auto"
-                        disabled={isSigningIn}
-                    >
-                        {isSigningIn ? 'Signing In...' : 'Sign in with Google'}
-                    </button>
-                </div>
-            </div>
+            <button 
+                onClick={handleGoogleSignIn} 
+                disabled={isSigningIn}
+                className="btn btn-primary text-xl px-8 py-4"
+            >
+                {isSigningIn ? (
+                    <>
+                        <div className="loading mr-2"></div>
+                        <span>Signing you in...</span>
+                    </>
+                ) : (
+                    <span>🔐 Continue with Google</span>
+                )}
+            </button>
         </main>
     );
 } 

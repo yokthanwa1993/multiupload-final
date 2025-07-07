@@ -1,10 +1,10 @@
 import UploadClient from './components/UploadClient';
 import ProtectedRoute from './components/ProtectedRoute';
-import { cookies } from 'next/headers';
 import { adminAuth } from './lib/firebase-admin';
 import fs from 'fs';
 import path from 'path';
 import { google } from 'googleapis';
+import { getFirebaseUser } from './lib/server-auth';
 
 export const dynamic = 'force-dynamic'; // Force dynamic rendering, disable caching
 
@@ -21,31 +21,6 @@ interface FacebookPage {
 }
 
 // --- Server-side Data Fetching Functions ---
-
-async function getFirebaseUser() {
-  console.log("\n[SSR] 1. Attempting to get Firebase user from cookie...");
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get('session');
-  if (!sessionCookie?.value) {
-    console.log("[SSR] 1.1. No session cookie found.");
-    return null;
-  }
-  console.log("[SSR] 1.2. Session cookie found.");
-
-  if (!adminAuth) {
-    console.error("Firebase Admin SDK is not initialized. Cannot verify session cookie.");
-    return null;
-  }
-
-  try {
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie.value, true);
-    console.log(`[SSR] 1.3. Cookie verified for user UID: ${decodedToken.uid}`);
-    return decodedToken;
-  } catch (error) {
-    console.log("[SSR] 1.4. Failed to verify session cookie:", error);
-    return null;
-  }
-}
 
 async function getYoutubeStatus(uid: string | null): Promise<YouTubeChannel | null> {
     console.log(`[SSR] 2. Checking YouTube status for UID: ${uid}`);
@@ -114,11 +89,9 @@ async function getFacebookStatus(uid: string | null): Promise<FacebookPage | nul
 }
 
 export default async function Home() {
-  console.log("--- [SSR] Home Page Render ---");
   const user = await getFirebaseUser();
   const youtubeChannel = await getYoutubeStatus(user?.uid || null);
   const facebookPage = await getFacebookStatus(user?.uid || null);
-  console.log("[SSR] 4. Final statuses:", { hasYoutube: !!youtubeChannel, hasFacebook: !!facebookPage });
 
   return (
     <ProtectedRoute>

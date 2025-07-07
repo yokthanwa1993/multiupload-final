@@ -17,23 +17,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         if (!auth) {
-            console.log("AuthContext: Firebase auth not initialized");
             setLoading(false);
             return;
         }
 
-        console.log("AuthContext: Subscribing to auth state changes...");
         const unsubscribe = onAuthStateChanged(auth, (user) => {
-            console.log("AuthContext: onAuthStateChanged fired. User:", user ? user.uid : 'null');
             setUser(user);
             setLoading(false);
-            console.log("AuthContext: State updated. Loading is now false.");
         });
 
-        return () => {
-            console.log("AuthContext: Unsubscribing from auth state changes.");
-            unsubscribe();
-        }
+        // Cleanup subscription on unmount
+        return () => unsubscribe();
     }, []);
 
     return (

@@ -29,6 +29,12 @@ interface UploadResult {
 // --- Component ---
 export default function UploadClient({ initialYoutubeChannel, initialFacebookPage }: UploadClientProps) {
   const { user } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    // This effect only runs on the client, after hydration is complete.
+    setIsMounted(true);
+  }, []);
 
   const [youtubeChannel, setYoutubeChannel] = useState(initialYoutubeChannel);
   const [facebookPage, setFacebookPage] = useState(initialFacebookPage);
@@ -46,11 +52,6 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
   const [publishAt, setPublishAt] = useState('');
 
   useEffect(() => {
-    setYoutubeChannel(initialYoutubeChannel);
-    setFacebookPage(initialFacebookPage);
-  }, [initialYoutubeChannel, initialFacebookPage]);
-
-  useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const { data } = event;
       if (data.type === 'facebook-connected' && data.page) setFacebookPage(data.page);
@@ -62,7 +63,10 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
 
   const handleYouTubeLogin = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      alert("Please wait for authentication to complete.");
+      return;
+    }
     const statePayload = JSON.stringify({ uid: user.uid });
     const oauthUrl = `/api/auth/youtube?state=${encodeURIComponent(statePayload)}`;
     const width = 860, height = 700;
@@ -72,7 +76,10 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
   };
   
   const handleFacebookConnect = () => {
-    if(!user) return;
+    if(!user) {
+      alert("Please wait for authentication to complete.");
+      return;
+    }
     const facebookUrl = `/facebook`;
     const width = 860, height = 700;
     const left = (window.screen.width / 2) - (width / 2);
@@ -247,19 +254,20 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
     }
   };
 
-  const showConnectButton = !!user;
-
+  // By applying a class that hides the component until it's mounted on the client,
+  // we ensure the server-rendered HTML is present but invisible, preventing a hydration mismatch
+  // and hiding the flash of default state.
   return (
-    <>
+    <div className={isMounted ? 'fade-in' : 'hide-until-mounted'}>
       <div className="status-bar">
         <div className={`platform-status-container facebook-status ${facebookPage ? 'status-online' : 'status-offline'}`}>
           <span className="platform-name">REELS</span>
-          {!facebookPage && showConnectButton && <button onClick={handleFacebookConnect} className="connect-link">Connect</button>}
+          {!facebookPage && <button onClick={handleFacebookConnect} className="connect-link">Connect</button>}
         </div>
         <div className="status-divider"></div>
         <div className={`platform-status-container youtube-status ${youtubeChannel ? 'status-online' : 'status-offline'}`}>
           <span className="platform-name">SHORTS</span>
-          {!youtubeChannel && showConnectButton && <button onClick={handleYouTubeLogin} className="connect-link">Connect</button>}
+          {!youtubeChannel && <button onClick={handleYouTubeLogin} className="connect-link">Connect</button>}
         </div>
       </div>
       <div className="glass-container">
@@ -441,6 +449,6 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 } 
