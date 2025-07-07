@@ -48,4 +48,4 @@ ENV PORT=9090
 ENV HOSTNAME="0.0.0.0"
 
 # Start the application
-CMD ["echo", "Hello CapRover, the time is $(date)"] 
+CMD ["node", "server.js"] 
