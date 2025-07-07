@@ -13,6 +13,12 @@ COPY . .
 # Build arguments for environment variables
 ARG GOOGLE_CLIENT_ID
 ARG GOOGLE_CLIENT_SECRET
+ARG NEXT_PUBLIC_BASE_URL
+
+# Set environment variables during build
+ENV GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+ENV GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+ENV NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL
 
 # Build the application
 RUN npm run build
@@ -46,6 +52,11 @@ USER nextjs
 EXPOSE 3000
 
 ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start the application
 CMD ["node", "server.js"] 
