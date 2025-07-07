@@ -2,120 +2,68 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
-import { getAuthenticatedClient } from '@/app/lib/youtube-auth';
-
-// Use the same logic as the auth library to determine the token path
-const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-const TOKEN_PATH = path.join(dataDir, 'token.json');
-
-// Ensure the data directory exists
-if (process.env.NODE_ENV === 'production' && !fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get('code');
-  const error = searchParams.get('error');
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
 
-  if (error) {
-    console.error('OAuth error:', error);
-    return new NextResponse(`
-      <html><body><script>
-        if (window.opener) {
-          window.opener.postMessage({ error: '${error}' }, window.location.origin);
-        }
-        window.close();
-      </script></body></html>
-    `, { headers: { 'Content-Type': 'text/html' } });
-  }
-
-  if (!code) {
-    return new NextResponse(`
-      <html><body><script>
-        if (window.opener) {
-          window.opener.postMessage({ error: 'No authorization code received' }, window.location.origin);
-        }
-        window.close();
-      </script></body></html>
-    `, { headers: { 'Content-Type': 'text/html' } });
-  }
-
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    if (!baseUrl) {
-      throw new Error("NEXT_PUBLIC_BASE_URL is not defined in environment");
-    }
-    const redirectUri = `${baseUrl}/api/auth/youtube/callback`;
-    
-    // Exchange code for tokens
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
-      }),
-    });
-
-    if (!tokenResponse.ok) {
-      const errorBody = await tokenResponse.json();
-      console.error('Failed to exchange code for tokens:', errorBody);
-      throw new Error(`Failed to exchange code for tokens: ${errorBody.error_description || 'Unknown error'}`);
+    if (!code || !state) {
+        return NextResponse.json({ error: 'Authorization code or state is missing.' }, { status: 400 });
     }
 
-    const tokens = await tokenResponse.json();
-
-    // Ensure we get a refresh token
-    if (!tokens.refresh_token) {
-      console.warn('Warning: Did not receive a refresh token. User may need to re-authenticate later.');
-      console.warn('This can happen if the user has already granted consent previously.');
-    }
-    
-    // Save tokens to the JSON file
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
-    console.log('Tokens saved to:', TOKEN_PATH);
-    
-    // Get channel information to pass back to the client
-    const oauth2Client = getAuthenticatedClient();
-    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
-    const channelRes = await youtube.channels.list({ part: ['snippet'], mine: true });
-    
-    let channelInfo = null;
-    if (channelRes.data.items && channelRes.data.items.length > 0) {
-      const channel = channelRes.data.items[0];
-      channelInfo = {
-        name: channel.snippet?.title,
-        pfp: channel.snippet?.thumbnails?.default?.url,
-      };
-    }
-
-    const response = new NextResponse(`
-      <html><body><script>
-        if (window.opener) {
-          window.opener.postMessage({ 
-            auth: 'success', 
-            channelInfo: ${JSON.stringify(channelInfo)}
-          }, window.location.origin);
+    try {
+        const { uid } = JSON.parse(state);
+        if (!uid) {
+            throw new Error("UID not found in state object.");
         }
-        window.close();
-      </script></body></html>
-    `, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
-    
-    return response;
 
-  } catch (error) {
-    console.error('OAuth callback error:', error);
-    return new NextResponse(`
-      <html><body><script>
-        if (window.opener) {
-          window.opener.postMessage({ error: 'Authentication failed' }, window.location.origin);
-        }
-        window.close();
-      </script></body></html>
-    `, { headers: { 'Content-Type': 'text/html' } });
-  }
+        const oauth2Client = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/youtube/callback`
+        );
+
+        const { tokens } = await oauth2Client.getToken(code);
+        oauth2Client.setCredentials(tokens);
+
+        // Save tokens to a user-specific file
+        const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+        const TOKEN_PATH = path.join(dataDir, `${uid}_youtube_token.json`);
+        fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+
+        // Fetch channel info to display to the user
+        const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+        const channelRes = await youtube.channels.list({ part: ['snippet'], mine: true });
+        const channel = channelRes.data.items?.[0];
+
+        // Send a message back to the opener window
+        const responseHtml = `
+            <script>
+                if (window.opener) {
+                    window.opener.postMessage({ 
+                        type: 'youtube-connected', 
+                        channel: ${JSON.stringify({
+                            name: channel?.snippet?.title || 'YouTube Channel',
+                            pfp: channel?.snippet?.thumbnails?.default?.url || '/youtube-logo.png'
+                        })}
+                    }, '*');
+                    window.close();
+                }
+            </script>
+            <p>Authentication successful. You can close this window.</p>
+        `;
+        
+        return new NextResponse(responseHtml, { 
+            headers: { 'Content-Type': 'text/html; charset=utf-8' } 
+        });
+
+    } catch (error) {
+        console.error("Error during YouTube callback:", error);
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+        const errorHtml = `<script>window.opener.postMessage({ error: '${errorMessage}' }, '*'); window.close();</script>`;
+        return new NextResponse(errorHtml, {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+    }
 } 

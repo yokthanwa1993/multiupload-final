@@ -2,20 +2,72 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { Buffer } from 'buffer';
 import { Readable } from 'stream';
-import { getAuthenticatedClient } from '../../../lib/youtube-auth';
+import fs from 'fs';
+import path from 'path';
+import { adminAuth } from '@/app/lib/firebase-admin';
 
 // This forces the route to be dynamic, which is a good practice for auth-related routes.
 export const dynamic = 'force-dynamic';
 
+// Helper to get UID from request
+async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
+    const authorization = req.headers.get('Authorization');
+    if (authorization?.startsWith('Bearer ')) {
+        const idToken = authorization.split('Bearer ')[1];
+        try {
+            return (await adminAuth.verifyIdToken(idToken)).uid;
+        } catch (error) {
+            return null; 
+        }
+    }
+    return null;
+}
+
+// Helper to get an authenticated OAuth2 client for a specific user
+async function getUserYoutubeClient(uid: string) {
+    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+    const tokenPath = path.join(dataDir, `${uid}_youtube_token.json`);
+
+    if (!fs.existsSync(tokenPath)) {
+        throw new Error('YouTube not connected for this user. Please connect it first.');
+    }
+
+    const tokenData = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
+    const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials(tokenData);
+    
+    // Add an event listener to handle token refreshes.
+    // If a new access token is automatically fetched, this event will fire.
+    oauth2Client.on('tokens', (newTokens) => {
+        console.log(`YouTube token for user ${uid} was refreshed.`);
+        // The new response might not include a refresh token, so we merge it with the old one.
+        if (!newTokens.refresh_token && tokenData.refresh_token) {
+            newTokens.refresh_token = tokenData.refresh_token;
+        }
+        // Save the updated (or merged) tokens back to the file.
+        fs.writeFileSync(tokenPath, JSON.stringify(newTokens));
+        console.log(`Refreshed token for user ${uid} saved.`);
+    });
+
+    return oauth2Client;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Get an authenticated client, which handles tokens automatically
-    const oauth2Client = await getAuthenticatedClient();
+    const uid = await getUserIdFromRequest(request);
+    if (!uid) {
+        return NextResponse.json({ error: 'Unauthorized user.' }, { status: 401 });
+    }
+
+    const oauth2Client = await getUserYoutubeClient(uid);
     
-    // Parse form data
     const formData = await request.formData();
-    const videoFile = formData.get('videoFile') as File | null;
-    const thumbnailFile = formData.get('thumbnailFile') as File | null;
+    // Correctly get files using the keys sent from the client
+    const videoFile = formData.get('video') as File | null;
+    const thumbnailFile = formData.get('thumbnail') as File | null;
     const description = formData.get('description') as string || '';
     const schedulePost = formData.get('schedulePost') as string;
     const publishAt = formData.get('publishAt') as string;
@@ -112,10 +164,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('YouTube upload error:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 } 

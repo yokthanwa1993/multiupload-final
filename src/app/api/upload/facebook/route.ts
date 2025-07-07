@@ -1,33 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { adminAuth } from '@/app/lib/firebase-admin';
 
-// Function to read the stored Facebook token data
-function getFacebookTokenData() {
+async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
+    const authorization = req.headers.get('Authorization');
+    if (authorization?.startsWith('Bearer ')) {
+        const idToken = authorization.split('Bearer ')[1];
+        try {
+            const decodedToken = await adminAuth.verifyIdToken(idToken);
+            return decodedToken.uid;
+        } catch (error) {
+            return null; 
+        }
+    }
+    return null;
+}
+
+function getFacebookTokenData(uid: string) {
   const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-  const TOKEN_PATH = path.join(dataDir, 'facebook-token.json');
+  const TOKEN_PATH = path.join(dataDir, `${uid}_facebook_token.json`);
 
   if (!fs.existsSync(TOKEN_PATH)) {
-    throw new Error('Facebook page not connected. Please connect a page first.');
+    throw new Error('Facebook page not connected for this user.');
   }
   const tokenData = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
   
   if (!tokenData.id || !tokenData.access_token) {
       throw new Error('Invalid Facebook token file. Please reconnect the page.');
   }
-
-  return {
-    pageId: tokenData.id,
-    accessToken: tokenData.access_token
-  };
+  return { pageId: tokenData.id, accessToken: tokenData.access_token };
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Get page ID and access token from the stored file
-    const { pageId, accessToken } = getFacebookTokenData();
+    const uid = await getUserIdFromRequest(request);
+    if (!uid) {
+        return NextResponse.json({ error: 'Unauthorized user.' }, { status: 401 });
+    }
 
-    // Parse form data
+    const { pageId, accessToken } = getFacebookTokenData(uid);
+    
     const formData = await request.formData();
     const videoFile = formData.get('video') as File;
     const thumbnailFile = formData.get('thumbnail') as File;
@@ -99,10 +112,8 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error uploading to Facebook:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

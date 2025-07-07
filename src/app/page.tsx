@@ -1,16 +1,18 @@
 import UploadClient from './components/UploadClient';
-import { getAuthenticatedClient } from './lib/youtube-auth';
-import { google } from 'googleapis';
+import ProtectedRoute from './components/ProtectedRoute';
+import { cookies } from 'next/headers';
+import { adminAuth } from './lib/firebase-admin';
 import fs from 'fs';
 import path from 'path';
+import { google } from 'googleapis';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'; // Force dynamic rendering, disable caching
 
+// --- Interfaces ---
 interface YouTubeChannel {
   name: string;
   pfp: string;
 }
-
 interface FacebookPage {
   id: string;
   name:string;
@@ -18,124 +20,112 @@ interface FacebookPage {
   category: string;
 }
 
-// Function to check authentication status on the server-side
-async function getAuthenticationStatus(): Promise<{
-  isAuthenticated: boolean;
-  channelInfo: YouTubeChannel | null;
-}> {
-  const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-  const tokenPath = path.join(dataDir, 'token.json');
-  const pfpDir = path.join(process.cwd(), 'public');
+// --- Server-side Data Fetching Functions ---
 
-  console.log(`[SSR] Checking for token at: ${tokenPath}`);
-
-  if (!fs.existsSync(tokenPath)) {
-    console.log('[SSR] Token file not found.');
-    return { isAuthenticated: false, channelInfo: null };
+async function getFirebaseUser() {
+  console.log("\n[SSR] 1. Attempting to get Firebase user from cookie...");
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get('session');
+  if (!sessionCookie?.value) {
+    console.log("[SSR] 1.1. No session cookie found.");
+    return null;
   }
-
-  console.log('[SSR] Token file found. Attempting to get authenticated client.');
+  console.log("[SSR] 1.2. Session cookie found.");
 
   try {
-    const oauth2Client = getAuthenticatedClient();
-    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
-    
-    const res = await youtube.channels.list({
-      part: ['snippet'],
-      mine: true,
-    });
-
-    if (res.data.items && res.data.items.length > 0) {
-      const channel = res.data.items[0];
-      let localPfpPath = '/logo.png';
-
-      // Find the most recent profile picture if it exists
-      const files = fs.readdirSync(pfpDir);
-      const profilePics = files
-        .filter(file => file.startsWith('youtube_profile_'))
-        .sort((a, b) => {
-          const timeA = parseInt(a.split('_').pop()?.split('.')[0] || '0');
-          const timeB = parseInt(b.split('_').pop()?.split('.')[0] || '0');
-          return timeB - timeA;
-        });
-
-      if (profilePics.length > 0) {
-        localPfpPath = `/${profilePics[0]}`;
-      }
-      
-      return {
-        isAuthenticated: true,
-        channelInfo: {
-          name: channel.snippet?.title || 'YouTube Channel',
-          pfp: localPfpPath,
-        },
-      };
-    }
-    return { isAuthenticated: true, channelInfo: null }; // Authenticated but couldn't fetch channel
+    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie.value, true);
+    console.log(`[SSR] 1.3. Cookie verified for user UID: ${decodedToken.uid}`);
+    return decodedToken;
   } catch (error) {
-    console.error('[SSR] Failed to verify token on server-side:', error);
-    // If token is invalid, delete it to force re-login
-    try {
-      fs.unlinkSync(tokenPath);
-      console.log('[SSR] Invalid token file deleted.');
-    } catch (unlinkError) {
-      console.error('[SSR] Failed to delete invalid token file:', unlinkError);
-    }
-    return { isAuthenticated: false, channelInfo: null };
+    console.log("[SSR] 1.4. Failed to verify session cookie:", error);
+    return null;
   }
 }
 
-// Function to check Facebook page connection status
-async function getFacebookStatus(): Promise<FacebookPage | null> {
-  const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-  const TOKEN_PATH = path.join(dataDir, 'facebook-token.json');
+async function getYoutubeStatus(uid: string | null): Promise<YouTubeChannel | null> {
+    console.log(`[SSR] 2. Checking YouTube status for UID: ${uid}`);
+    if (!uid) return null;
+    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+    const tokenPath = path.join(dataDir, `${uid}_youtube_token.json`);
+    console.log(`[SSR] 2.1. Looking for YouTube token at: ${tokenPath}`);
 
-  if (!fs.existsSync(TOKEN_PATH)) {
-    return null;
-  }
-
-  try {
-    const tokenDataString = fs.readFileSync(TOKEN_PATH, 'utf-8');
-    const tokenData = JSON.parse(tokenDataString);
-
-    if (!tokenData.id || !tokenData.access_token) {
-        throw new Error("Invalid token format");
+    if (!fs.existsSync(tokenPath)) {
+        console.log("[SSR] 2.2. YouTube token file not found.");
+        return null;
     }
+    console.log("[SSR] 2.3. YouTube token file found. Attempting to validate.");
 
-    // Validate the token by making a simple API call
-    const validationUrl = `https://graph.facebook.com/v23.0/me?access_token=${tokenData.access_token}`;
-    const response = await fetch(validationUrl);
-    const data = await response.json();
+    try {
+        const tokenData = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
+        const oauth2Client = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET
+        );
+        oauth2Client.setCredentials(tokenData);
 
-    if (data.error) {
-      // If there's an error, the token is invalid.
-      throw new Error(data.error.message);
+        const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+        const channelRes = await youtube.channels.list({ part: ['snippet'], mine: true });
+        const channel = channelRes.data.items?.[0];
+
+        if (!channel) throw new Error("Could not fetch YouTube channel.");
+
+        return {
+            name: channel.snippet?.title || 'YouTube Channel',
+            pfp: channel.snippet?.thumbnails?.default?.url || '/youtube-logo.png'
+        };
+    } catch (error) {
+        console.error(`[SSR] 2.4. ERROR - Invalid YouTube token for user ${uid}. Deleting file.`, error);
+        fs.unlinkSync(tokenPath);
+        return null;
     }
+}
 
-    // If we reach here, the token is valid.
-    return tokenData;
-    
-  } catch (error) {
-    console.error("Facebook token is invalid, deleting file:", error);
-    // If any error occurs (reading, parsing, validation), delete the invalid token file.
-    fs.unlinkSync(TOKEN_PATH);
-    return null;
-  }
+async function getFacebookStatus(uid: string | null): Promise<FacebookPage | null> {
+    console.log(`[SSR] 3. Checking Facebook status for UID: ${uid}`);
+    if (!uid) return null;
+    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+    const tokenPath = path.join(dataDir, `${uid}_facebook_token.json`);
+    console.log(`[SSR] 3.1. Looking for Facebook token at: ${tokenPath}`);
+
+    if (!fs.existsSync(tokenPath)) {
+        console.log("[SSR] 3.2. Facebook token file not found.");
+        return null;
+    }
+    console.log("[SSR] 3.3. Facebook token file found. Attempting to validate.");
+
+    try {
+        const tokenData = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
+        const validationUrl = `https://graph.facebook.com/v23.0/me?access_token=${tokenData.access_token}`;
+        const response = await fetch(validationUrl);
+        const validationData = await response.json();
+        if (validationData.error) throw new Error(validationData.error.message);
+        
+        return tokenData;
+    } catch (error) {
+        console.error(`[SSR] 3.4. ERROR - Invalid Facebook token for user ${uid}. Deleting file.`, error);
+        fs.unlinkSync(tokenPath);
+        return null;
+    }
 }
 
 export default async function Home() {
-  const { isAuthenticated, channelInfo } = await getAuthenticationStatus();
-  const facebookPage = await getFacebookStatus();
+  console.log("--- [SSR] Home Page Render ---");
+  const user = await getFirebaseUser();
+  const youtubeChannel = await getYoutubeStatus(user?.uid || null);
+  const facebookPage = await getFacebookStatus(user?.uid || null);
+  console.log("[SSR] 4. Final statuses:", { hasYoutube: !!youtubeChannel, hasFacebook: !!facebookPage });
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="main-container">
-        <UploadClient 
-          initialAuthStatus={isAuthenticated} 
-          initialYoutubeChannel={channelInfo} 
-          initialFacebookPage={facebookPage}
-        />
-      </div>
-    </main>
+    <ProtectedRoute>
+      <main className="min-h-screen flex items-center justify-center p-4">
+        <div className="main-container">
+          <UploadClient 
+            key={user?.uid || 'logged-out'}
+            initialYoutubeChannel={youtubeChannel} 
+            initialFacebookPage={facebookPage}
+          />
+        </div>
+      </main>
+    </ProtectedRoute>
   );
 }

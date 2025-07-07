@@ -65,3 +65,10 @@ Temporary Items
 
 # Token file
 token.json facebook-token.json
+
+# User-specific tokens
+*_facebook_token.json
+*_youtube_token.json
+
+# Log files
+*.log

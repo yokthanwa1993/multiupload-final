@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { auth } from '@/app/lib/firebase';
 
 interface FacebookPage {
   id: string;
@@ -56,9 +57,16 @@ export default function FacebookManagerClient({ initialSelectedPage }: FacebookM
   const handleSelectPage = async (page: FacebookPage) => {
     setIsLoading(true);
     try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated.");
+      const idToken = await user.getIdToken();
+
       const response = await fetch('/api/auth/facebook/token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+        },
         body: JSON.stringify(page),
       });
 
@@ -90,8 +98,15 @@ export default function FacebookManagerClient({ initialSelectedPage }: FacebookM
   const handleDisconnectPage = async () => {
     setIsLoading(true);
     try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated.");
+      const idToken = await user.getIdToken();
+
       const response = await fetch('/api/auth/facebook/token', {
         method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${idToken}`,
+        },
       });
       
       if (!response.ok) {

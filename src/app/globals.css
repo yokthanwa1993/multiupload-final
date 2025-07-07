@@ -47,6 +47,7 @@ body {
     padding: 2rem;
     font-size: 16px;
     line-height: 1.6;
+    padding-top: 70px; /* Height of the navbar + some breathing room */
 }
 
 /* Animated Background */
@@ -212,8 +213,9 @@ body::before {
 }
 
 .platform-status-container.status-offline {
-    background: linear-gradient(135deg, #4f5257, #36393f);
+    background: transparent;
     color: #a0a9c0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .platform-name {
@@ -1073,4 +1075,47 @@ body::before {
     margin: 0;
     line-height: 1.4;
     opacity: 0.8;
+}
+
+/* Navbar Styles */
+.top-navbar {
+    width: 100%;
+    background-color: rgba(26, 26, 46, 0.8); /* var(--bg-secondary) with opacity */
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 600;
+}
+
+.user-avatar {
+    border-radius: 50%;
+    border: 2px solid var(--border);
+}
+
+.logout-button {
+    background-color: var(--primary-dark);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.logout-button:hover {
+    background-color: var(--primary);
 }

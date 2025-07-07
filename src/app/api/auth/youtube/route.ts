@@ -1,30 +1,35 @@
-import { NextResponse } from 'next/server';
-import { redirect } from 'next/navigation';
+import { NextRequest, NextResponse } from 'next/server';
+import { google } from 'googleapis';
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const action = url.searchParams.get('action');
-  
-  if (action === 'login') {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const state = searchParams.get('state');
 
-    if (!clientId || !baseUrl) {
-      return NextResponse.json({ error: 'Google OAuth or Base URL not configured' }, { status: 500 });
-    }
-
-    const redirectUri = `${baseUrl}/api/auth/youtube/callback`;
-    const scopes = [
-      'https://www.googleapis.com/auth/youtube.upload',
-      'https://www.googleapis.com/auth/youtube.readonly'
-    ].join(' ');
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}&response_type=code&scope=${encodeURIComponent(scopes)}&access_type=offline&prompt=consent`;
-
-    redirect(authUrl);
+  if (!state) {
+    return NextResponse.json({ error: 'State parameter is required.' }, { status: 400 });
   }
-  
-  return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+
+  try {
+    // We just pass the state through, the callback will verify it contains the UID.
+    const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/youtube/callback`
+    );
+
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: [
+        'https://www.googleapis.com/auth/youtube.upload',
+        'https://www.googleapis.com/auth/youtube.readonly'
+      ],
+      prompt: 'consent',
+      state: state // Pass the original state parameter right through to Google
+    });
+
+    return NextResponse.redirect(authUrl);
+  } catch (error) {
+    console.error("Error generating auth URL:", error);
+    return NextResponse.json({ error: 'Failed to initiate authentication.' }, { status: 500 });
+  }
 } 

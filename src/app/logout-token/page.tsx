@@ -1,32 +1,39 @@
+import { cookies } from 'next/headers';
+import { adminAuth } from '@/app/lib/firebase-admin';
 import fs from 'fs';
 import path from 'path';
 import LogoutClient from './LogoutClient';
 
-// We can reuse the status checking logic. Ideally, this would be in a shared lib.
-async function getYoutubeStatus(): Promise<boolean> {
-  const tokenPath = path.join(process.cwd(), 'token.json');
-  if (!fs.existsSync(tokenPath)) return false;
-  // A more robust check could validate the token here, but for now, file existence is enough.
-  return true;
+async function getFirebaseUser() {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get('session');
+  if (!sessionCookie?.value) return null;
+  try {
+    return await adminAuth.verifySessionCookie(sessionCookie.value, true);
+  } catch (error) {
+    return null;
+  }
 }
 
-async function getFacebookStatus(): Promise<boolean> {
-  const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-  const TOKEN_PATH = path.join(dataDir, 'facebook-token.json');
-  if (!fs.existsSync(TOKEN_PATH)) return false;
-  return true;
+async function getPlatformStatus(uid: string | null, platform: 'youtube' | 'facebook'): Promise<boolean> {
+    if (!uid) return false;
+    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
+    const tokenPath = path.join(dataDir, `${uid}_${platform}_token.json`);
+    return fs.existsSync(tokenPath);
 }
-
 
 export default async function LogoutPage() {
-    const youtubeStatus = await getYoutubeStatus();
-    const facebookStatus = await getFacebookStatus();
+    const user = await getFirebaseUser();
+    
+    const youtubeStatus = await getPlatformStatus(user?.uid || null, 'youtube');
+    const facebookStatus = await getPlatformStatus(user?.uid || null, 'facebook');
 
     return (
         <main className="min-h-screen flex items-center justify-center p-4">
             <div className="main-container">
                 <div className="glass-container">
                     <LogoutClient 
+                        userName={user?.name || 'User'}
                         initialYoutubeStatus={youtubeStatus}
                         initialFacebookStatus={facebookStatus}
                     />
