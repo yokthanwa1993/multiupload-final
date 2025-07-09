@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { Buffer } from 'buffer';
 import { Readable } from 'stream';
-import fs from 'fs';
-import path from 'path';
 import { adminAuth } from '@/app/lib/firebase-admin';
+import { getToken, setToken } from '@/app/lib/realtimedb-tokens';
 
 // This forces the route to be dynamic, which is a good practice for auth-related routes.
 export const dynamic = 'force-dynamic';
@@ -28,14 +27,12 @@ async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
 
 // Helper to get an authenticated OAuth2 client for a specific user
 async function getUserYoutubeClient(uid: string) {
-    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-    const tokenPath = path.join(dataDir, `${uid}_youtube_token.json`);
+    const tokenData = await getToken(uid, 'youtube');
 
-    if (!fs.existsSync(tokenPath)) {
+    if (!tokenData) {
         throw new Error('YouTube not connected for this user. Please connect it first.');
     }
 
-    const tokenData = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
     const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET
@@ -44,15 +41,15 @@ async function getUserYoutubeClient(uid: string) {
     
     // Add an event listener to handle token refreshes.
     // If a new access token is automatically fetched, this event will fire.
-    oauth2Client.on('tokens', (newTokens) => {
+    oauth2Client.on('tokens', async (newTokens) => {
         console.log(`YouTube token for user ${uid} was refreshed.`);
         // The new response might not include a refresh token, so we merge it with the old one.
         if (!newTokens.refresh_token && tokenData.refresh_token) {
             newTokens.refresh_token = tokenData.refresh_token;
         }
-        // Save the updated (or merged) tokens back to the file.
-        fs.writeFileSync(tokenPath, JSON.stringify(newTokens));
-        console.log(`Refreshed token for user ${uid} saved.`);
+        // Save the updated (or merged) tokens back to the database.
+        await setToken(uid, 'youtube', newTokens);
+        console.log(`Refreshed token for user ${uid} saved to Firestore.`);
     });
 
     return oauth2Client;
@@ -91,8 +88,8 @@ export async function POST(request: NextRequest) {
     const isScheduled = schedulePost === 'true' && publishAt;
     
     if (isScheduled) {
-      const publishTime = new Date(publishAt);
-      publishAtISO = publishTime.toISOString();
+      // The 'publishAt' from the client is already in ISO format.
+      publishAtISO = publishAt;
     }
 
     // Initialize YouTube API with the authenticated client

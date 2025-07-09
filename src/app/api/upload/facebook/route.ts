@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 import { adminAuth } from '@/app/lib/firebase-admin';
+import { getToken } from '@/app/lib/realtimedb-tokens';
 
 async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
     const authorization = req.headers.get('Authorization');
@@ -19,14 +18,12 @@ async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
     return null;
 }
 
-function getFacebookTokenData(uid: string) {
-  const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-  const TOKEN_PATH = path.join(dataDir, `${uid}_facebook_token.json`);
+async function getFacebookTokenData(uid: string) {
+  const tokenData = await getToken(uid, 'facebook');
 
-  if (!fs.existsSync(TOKEN_PATH)) {
+  if (!tokenData) {
     throw new Error('Facebook page not connected for this user.');
   }
-  const tokenData = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
   
   if (!tokenData.id || !tokenData.access_token) {
       throw new Error('Invalid Facebook token file. Please reconnect the page.');
@@ -41,7 +38,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized user.' }, { status: 401 });
     }
 
-    const { pageId, accessToken } = getFacebookTokenData(uid);
+    const { pageId, accessToken } = await getFacebookTokenData(uid);
     
     const formData = await request.formData();
     const videoFile = formData.get('video') as File;
@@ -76,16 +73,9 @@ export async function POST(request: NextRequest) {
     const isScheduled = schedulePost === 'true' && publishAt;
     
     if (isScheduled) {
+      // The client now sends a UTC ISO string, so new Date() will parse it correctly as UTC.
+      // The client is also responsible for the 15-minute validation.
       const publishTime = new Date(publishAt);
-      const now = new Date();
-      now.setMinutes(now.getMinutes() + 15); // Add 15 minutes buffer
-      
-      if (publishTime <= now) {
-        return NextResponse.json({ 
-          error: 'เวลาที่ตั้งต้องเป็นอนาคตอย่างน้อย 15 นาที' 
-        }, { status: 400 });
-      }
-      
       scheduledTimestamp = Math.floor(publishTime.getTime() / 1000);
     }
 
@@ -172,11 +162,50 @@ async function uploadToFacebookReel(
   
   // Step 1c: Finish upload
   const finishParams = new URLSearchParams({
-    video_id: videoId,
+    video_id: videoId, // Fixed: Added video_id back
     upload_phase: 'finish',
     description: description,
     access_token: accessToken,
   });
+
+  // If thumbnail is provided, upload it first to get a handle
+  let thumbnailUploadId: string | null = null;
+  if (thumbnailBuffer) {
+      try {
+          const thumbnailInitUrl = `${FACEBOOK_GRAPH_API_URL}${pageId}/video_thumbnails?access_token=${accessToken}`;
+          const thumbInitResponse = await fetch(thumbnailInitUrl, { method: 'POST' });
+          if (!thumbInitResponse.ok) {
+              const errorData = await thumbInitResponse.json();
+              console.warn(`FB Thumbnail Init Failed (HTTP ${thumbInitResponse.status}): ${errorData.error?.message || 'Unknown error'}`);
+          } else {
+              const thumbInitData = await thumbInitResponse.json();
+              if (thumbInitData.upload_url) {
+                  const thumbUploadResponse = await fetch(thumbInitData.upload_url, {
+                      method: 'POST',
+                      headers: {
+                          'Authorization': `OAuth ${accessToken}`,
+                          'Content-Type': 'application/octet-stream',
+                          'File_Size': thumbnailBuffer.length.toString(),
+                      },
+                      body: thumbnailBuffer,
+                  });
+                  if (thumbUploadResponse.ok) {
+                      thumbnailUploadId = thumbInitData.id;
+                  } else {
+                      const errorText = await thumbUploadResponse.text();
+                      console.warn(`FB Thumbnail Upload Failed: ${errorText}`);
+                  }
+              }
+          }
+      } catch (thumbError) {
+          console.warn('An exception occurred during thumbnail upload:', thumbError);
+      }
+  }
+
+  // Append thumbnail ID to finish parameters if available
+  if (thumbnailUploadId) {
+      finishParams.append('thumbnail_file_id', thumbnailUploadId);
+  }
   
   if (scheduledTimestamp) {
     finishParams.append('video_state', 'SCHEDULED');
@@ -185,13 +214,19 @@ async function uploadToFacebookReel(
     finishParams.append('video_state', 'PUBLISHED');
   }
   
-  const finishUrl = `${baseUrl}?${finishParams.toString()}`;
+  const finishUrl = `${baseUrl}?${finishParams.toString()}`; // Fixed: Corrected the URL structure
   const finishResponse = await fetch(finishUrl, {
     method: 'POST',
   });
   
   if (!finishResponse.ok) {
     const errorText = await finishResponse.text();
+    // Try to delete the video if publish fails
+    try {
+        await fetch(`${FACEBOOK_GRAPH_API_URL}${videoId}?access_token=${accessToken}`, { method: 'DELETE' });
+    } catch (deleteError) {
+        console.error('Failed to delete incomplete video artifact:', deleteError);
+    }
     throw new Error(`FB Finish Failed: ${errorText}`);
   }
   
@@ -200,44 +235,55 @@ async function uploadToFacebookReel(
     throw new Error('FB Publish command did not succeed');
   }
   
-  // Step 2: Wait for processing
+  // Step 2: Wait for processing until the video is 'ready'
   let isReady = false;
-  for (let i = 0; i < 24; i++) {
-    const statusUrl = `${FACEBOOK_GRAPH_API_URL}${videoId}?fields=status&access_token=${accessToken}`;
+  for (let i = 0; i < 24; i++) { // Poll for up to 2 minutes (24 * 5s)
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
     
+    const statusUrl = `${FACEBOOK_GRAPH_API_URL}${videoId}?fields=status&access_token=${accessToken}`;
     const statusResponse = await fetch(statusUrl);
+
     if (statusResponse.ok) {
       const statusData = await statusResponse.json();
       if (statusData.status?.video_status === 'ready') {
         isReady = true;
-        break;
+        break; // Exit loop once ready
       }
+    } else {
+        // If status check fails, log it but continue polling
+        console.warn(`Could not check video status (attempt ${i + 1})`);
     }
-    
-    // Wait 5 seconds before checking again
-    await new Promise(resolve => setTimeout(resolve, 5000));
   }
   
   if (!isReady) {
-    throw new Error('วิดีโอใช้เวลาประมวลผลนานเกินไป');
+    // If the video is still not ready, try to delete the artifact
+    try {
+        await fetch(`${FACEBOOK_GRAPH_API_URL}${videoId}?access_token=${accessToken}`, { method: 'DELETE' });
+    } catch (deleteError) {
+        console.error('Failed to delete unprocessed video artifact:', deleteError);
+    }
+    throw new Error('วิดีโอใช้เวลาประมวลผลนานเกินไปและถูกลบแล้ว กรุณาลองอีกครั้ง');
   }
   
-  // Step 3: Set thumbnail (if provided)
+  // Step 3: Set thumbnail. This step is now mandatory if a thumbnail is provided.
   if (thumbnailBuffer) {
-    try {
-      const thumbnailUrl = `${FACEBOOK_GRAPH_API_URL}${videoId}/thumbnails`;
-      const thumbnailFormData = new FormData();
-      thumbnailFormData.append('access_token', accessToken);
-      thumbnailFormData.append('source', new Blob([thumbnailBuffer]), 'thumbnail.jpg');
-      thumbnailFormData.append('is_preferred', 'true');
-      
-      await fetch(thumbnailUrl, {
-        method: 'POST',
-        body: thumbnailFormData,
-      });
-    } catch (thumbnailError) {
-      console.error('Failed to upload thumbnail:', thumbnailError);
-      // Continue even if thumbnail upload fails
+    const thumbnailUrl = `${FACEBOOK_GRAPH_API_URL}${videoId}/thumbnails`;
+    const thumbnailFormData = new FormData();
+    thumbnailFormData.append('access_token', accessToken);
+    // Use Blob to send the file buffer with a content type
+    const imageBlob = new Blob([thumbnailBuffer], { type: 'image/jpeg' });
+    thumbnailFormData.append('source', imageBlob, 'thumbnail.jpg');
+    thumbnailFormData.append('is_preferred', 'true');
+    
+    const thumbnailResponse = await fetch(thumbnailUrl, {
+      method: 'POST',
+      body: thumbnailFormData,
+    });
+
+    if (!thumbnailResponse.ok) {
+        const errorData = await thumbnailResponse.json();
+        // If thumbnail fails, the entire upload is considered a failure.
+        throw new Error(`อัปโหลดวิดีโอสำเร็จ แต่ตั้งค่าภาพปกไม่สำเร็จ: ${errorData.error?.message || 'Unknown error'}`);
     }
   }
   

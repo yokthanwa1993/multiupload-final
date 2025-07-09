@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 import { adminAuth } from '@/app/lib/firebase-admin';
+import { setToken, deleteToken } from '@/app/lib/realtimedb-tokens';
 
 async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
     const authorization = req.headers.get('Authorization');
@@ -19,13 +18,6 @@ async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
     return null;
 }
 
-const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-
-// Ensure the data directory exists
-if (process.env.NODE_ENV === 'production' && !fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
 export async function POST(req: NextRequest) {
   const uid = await getUserIdFromRequest(req);
   if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -36,8 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid page data provided.' }, { status: 400 });
     }
 
-    const TOKEN_PATH = path.join(dataDir, `${uid}_facebook_token.json`);
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(pageData, null, 2));
+    await setToken(uid, 'facebook', pageData);
     
     return NextResponse.json({ message: 'Token saved successfully.' }, { status: 200 });
   } catch (error) {
@@ -51,10 +42,7 @@ export async function DELETE(req: NextRequest) {
     if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const TOKEN_PATH = path.join(dataDir, `${uid}_facebook_token.json`);
-    if (fs.existsSync(TOKEN_PATH)) {
-      fs.unlinkSync(TOKEN_PATH);
-    }
+    await deleteToken(uid, 'facebook');
     return NextResponse.json({ message: 'Token deleted successfully.' }, { status: 200 });
   } catch (error) {
     console.error('Error deleting Facebook token:', error);

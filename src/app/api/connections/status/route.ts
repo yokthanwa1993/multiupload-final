@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/app/lib/firebase-admin';
-import fs from 'fs';
-import path from 'path';
+import { getToken, deleteToken } from '@/app/lib/realtimedb-tokens';
 import { google } from 'googleapis';
 
 async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
@@ -20,12 +19,11 @@ async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
     return null;
 }
 
-async function getYoutubeChannel(uid: string, dataDir: string) {
-    const tokenPath = path.join(dataDir, `${uid}_youtube_token.json`);
-    if (!fs.existsSync(tokenPath)) return null;
+async function getYoutubeChannel(uid: string) {
+    const tokenData = await getToken(uid, 'youtube');
+    if (!tokenData) return null;
 
     try {
-        const tokenData = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
         const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
         oauth2Client.setCredentials(tokenData);
         const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
@@ -40,22 +38,21 @@ async function getYoutubeChannel(uid: string, dataDir: string) {
         };
     } catch (error) {
         console.error(`Invalid YouTube token for user ${uid}, deleting.`, error);
-        fs.unlinkSync(tokenPath);
+        await deleteToken(uid, 'youtube');
         return null;
     }
 }
 
-async function getFacebookPage(uid: string, dataDir: string) {
-    const tokenPath = path.join(dataDir, `${uid}_facebook_token.json`);
-    if (!fs.existsSync(tokenPath)) return null;
+async function getFacebookPage(uid: string) {
+    const tokenData = await getToken(uid, 'facebook');
+    if (!tokenData) return null;
 
     try {
-        const tokenData = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
         // A simple validation might be needed here as well in a real app
         return tokenData;
     } catch (error) {
         console.error(`Invalid Facebook token for user ${uid}, deleting.`, error);
-        fs.unlinkSync(tokenPath);
+        await deleteToken(uid, 'facebook');
         return null;
     }
 }
@@ -66,11 +63,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-    
     const [youtubeChannel, facebookPage] = await Promise.all([
-        getYoutubeChannel(uid, dataDir),
-        getFacebookPage(uid, dataDir)
+        getYoutubeChannel(uid),
+        getFacebookPage(uid)
     ]);
 
     return NextResponse.json({

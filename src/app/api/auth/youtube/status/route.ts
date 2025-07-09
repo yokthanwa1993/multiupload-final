@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 import { adminAuth } from '@/app/lib/firebase-admin';
+import { deleteToken } from '@/app/lib/realtimedb-tokens';
 
 // Force dynamic execution to prevent caching
 export const dynamic = 'force-dynamic';
@@ -29,12 +28,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-    const tokenPath = path.join(dataDir, `${uid}_youtube_token.json`);
-
-    if (fs.existsSync(tokenPath)) {
-      fs.unlinkSync(tokenPath);
-    }
+    await deleteToken(uid, 'youtube');
     return NextResponse.json({ success: true, message: 'YouTube connection deleted successfully' });
   } catch (error) {
     console.error('YouTube disconnect error:', error);

@@ -50,6 +50,22 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
   const [isDragging, setIsDragging] = useState(false);
   const [schedulePost, setSchedulePost] = useState(false);
   const [publishAt, setPublishAt] = useState('');
+  const [minScheduleTime, setMinScheduleTime] = useState('');
+
+  useEffect(() => {
+    const now = new Date();
+    // Add 11 minutes to be safe and account for any slight delay
+    const tenMinutesFromNow = new Date(now.getTime() + 11 * 60 * 1000); 
+    
+    // Format for datetime-local input: YYYY-MM-DDTHH:mm
+    const year = tenMinutesFromNow.getFullYear();
+    const month = String(tenMinutesFromNow.getMonth() + 1).padStart(2, '0');
+    const day = String(tenMinutesFromNow.getDate()).padStart(2, '0');
+    const hours = String(tenMinutesFromNow.getHours()).padStart(2, '0');
+    const minutes = String(tenMinutesFromNow.getMinutes()).padStart(2, '0');
+    
+    setMinScheduleTime(`${year}-${month}-${day}T${hours}:${minutes}`);
+  }, [schedulePost]); // Recalculate when the schedule checkbox is toggled
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -96,7 +112,16 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
   };
 
   const handlePublishAtChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPublishAt(e.target.value);
+    const selectedTime = e.target.value;
+
+    if (selectedTime && minScheduleTime && selectedTime < minScheduleTime) {
+      // Silently switch to "Post Now" mode if the time is invalid
+      setSchedulePost(false);
+      setPublishAt('');
+      return;
+    }
+
+    setPublishAt(selectedTime);
   }
 
   const truncateFileName = (fileName: string, maxLength: number = 30) => {
@@ -165,13 +190,22 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
       return;
     }
 
+    if (schedulePost && !publishAt) {
+      alert('Please select a date and time to schedule the post.');
+      return;
+    }
+
+    // This client-side check is now a fallback, the input's `min` attribute should prevent this.
     if (schedulePost && publishAt) {
       const selectedDate = new Date(publishAt);
       const now = new Date();
-      now.setMinutes(now.getMinutes() + 15);
+      // Set seconds to 0 to compare fairly with datetime-local which has no seconds
+      now.setSeconds(0, 0); 
       
-      if (selectedDate <= now) {
-        alert('Scheduled time must be at least 15 minutes in the future');
+      const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000);
+
+      if (selectedDate < tenMinutesFromNow) {
+        alert('Scheduled time must be at least 10 minutes in the future (Facebook requires this).');
         return;
       }
     }
@@ -190,7 +224,10 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
         if (thumbnailFile) formData.append('thumbnail', thumbnailFile);
         formData.append('description', description);
         formData.append('schedulePost', schedulePost.toString());
-        if (publishAt) formData.append('publishAt', publishAt);
+        if (schedulePost && publishAt) {
+          // Convert local time from input to UTC ISO string before sending
+          formData.append('publishAt', new Date(publishAt).toISOString());
+        }
 
         const finalResults: UploadResult[] = [];
 
@@ -274,10 +311,6 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
         {/* Upload Results - Above Form */}
         {uploadResults.length > 0 && (
           <div className="upload-results-top">
-            <div className="results-header">
-              <div className="results-icon">📊</div>
-              <div>Upload Results</div>
-            </div>
             <div className="results-body">
               {uploadResults.map((result, index) => (
                 <div key={index} className={`platform-row ${result.status === 'success' ? (result.platform === 'facebook' ? 'facebook-row' : 'youtube-row') : 'error-row'}`}>
@@ -305,7 +338,7 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
                       </div>
                       <div className="link-section">
                         <a href={result.url} target="_blank" rel="noopener noreferrer" className="view-link">
-                          🔗 {result.platform === 'facebook' ? 'View Reel' : 'View Short'}
+                          🔗 View
                         </a>
                         <button 
                           className="copy-button-large" 
@@ -416,6 +449,7 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
                                 className="form-input" 
                                 value={publishAt}
                                 onChange={handlePublishAtChange}
+                                min={minScheduleTime}
                                 style={{ minHeight: 'auto' }}
                             />
                          )}
@@ -438,7 +472,7 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
             </div>
         </form>
 
-        {/* Progress Container - Only for loading */}
+        {/* Progress Container - Moved back outside the form */}
         {(isUploading || uploadStatus) && (
           <div id="progress-container" className="progress-container-inline">
               <div className="progress-bar-wrapper">

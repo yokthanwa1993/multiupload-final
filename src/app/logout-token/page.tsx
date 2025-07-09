@@ -1,8 +1,7 @@
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/app/lib/firebase-admin';
-import fs from 'fs';
-import path from 'path';
 import LogoutClient from './LogoutClient';
+import { getToken } from '@/app/lib/realtimedb-tokens';
 
 async function getFirebaseUser() {
   const cookieStore = await cookies();
@@ -19,9 +18,8 @@ async function getFirebaseUser() {
 
 async function getPlatformStatus(uid: string | null, platform: 'youtube' | 'facebook'): Promise<boolean> {
     if (!uid) return false;
-    const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-    const tokenPath = path.join(dataDir, `${uid}_${platform}_token.json`);
-    return fs.existsSync(tokenPath);
+    const token = await getToken(uid, platform);
+    return !!token;
 }
 
 export default async function LogoutPage() {

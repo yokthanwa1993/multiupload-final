@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import fs from 'fs';
-import path from 'path';
+import { setToken } from '@/app/lib/realtimedb-tokens';
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
@@ -28,9 +27,7 @@ export async function GET(request: NextRequest) {
         oauth2Client.setCredentials(tokens);
 
         // Save tokens to a user-specific file
-        const dataDir = process.env.NODE_ENV === 'production' ? '/app/data' : process.cwd();
-        const TOKEN_PATH = path.join(dataDir, `${uid}_youtube_token.json`);
-        fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+        await setToken(uid, 'youtube', tokens);
 
         // Fetch channel info to display to the user
         const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
