@@ -68,7 +68,7 @@ export default function HistoryClient() {
         return (
             <div className="text-center p-10">
                 <h2 className="text-2xl font-bold mb-4">No Post History Found</h2>
-                <p className="text-gray-400 mb-6">You haven't posted anything yet. Go ahead and make your first post!</p>
+                <p className="text-gray-400 mb-6">You haven&apos;t posted anything yet. Go ahead and make your first post!</p>
                 <Link href="/" className="bg-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-primary-dark transition-colors">
                     Go to Upload
                 </Link>

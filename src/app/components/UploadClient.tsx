@@ -230,10 +230,10 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
         // Create different descriptions for different platforms
         const hasLinks = (useShopeeLink && shopeeLink) || (useLazadaLink && lazadaLink);
         
-        let facebookDescription, youtubeDescription;
+        let facebookDescription;
         
         // YouTube always uses original description + standard hashtags
-        youtubeDescription = description + '\n\n#เล่าเรื่อง #คลิปไวรัล #viralvideo #shorts';
+        const youtubeDescription = description + '\n\n#เล่าเรื่อง #คลิปไวรัล #viralvideo #shorts';
         
         if (hasLinks) {
           // When has links: Facebook uses template
