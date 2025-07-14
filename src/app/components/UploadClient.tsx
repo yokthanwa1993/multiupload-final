@@ -51,6 +51,10 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
   const [schedulePost, setSchedulePost] = useState(false);
   const [publishAt, setPublishAt] = useState('');
   const [minScheduleTime, setMinScheduleTime] = useState('');
+  const [shopeeLink, setShopeeLink] = useState('');
+  const [lazadaLink, setLazadaLink] = useState('');
+  const [useShopeeLink, setUseShopeeLink] = useState(false);
+  const [useLazadaLink, setUseLazadaLink] = useState(false);
 
   useEffect(() => {
     const now = new Date();
@@ -222,7 +226,32 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
         const formData = new FormData();
         formData.append('video', videoFile);
         if (thumbnailFile) formData.append('thumbnail', thumbnailFile);
-        formData.append('description', description);
+        
+        // Create different descriptions for different platforms
+        const hasLinks = (useShopeeLink && shopeeLink) || (useLazadaLink && lazadaLink);
+        
+        let facebookDescription, youtubeDescription;
+        
+        // YouTube always uses original description + standard hashtags
+        youtubeDescription = description + '\n\n#เล่าเรื่อง #คลิปไวรัล #viralvideo #shorts';
+        
+        if (hasLinks) {
+          // When has links: Facebook uses template
+          facebookDescription = `ตื่นมาไม่เจอฝันร้ายแบบในคลิป ต้องมีเต็นท์ดีๆ สักหลัง! 🦟
+ปกป้องคุณจากยุงและแมลง ให้การแคมป์ปิ้งราบรื่น
+
+`;
+          if (useLazadaLink && lazadaLink) facebookDescription += `Lazada 🔵 : ${lazadaLink}\n`;
+          if (useShopeeLink && shopeeLink) facebookDescription += `Shopee 🟠 : ${shopeeLink}\n`;
+          facebookDescription += `\n#เครื่องครัว #รีวิวของใช้ในบ้าน #reels #viralvideo`;
+        } else {
+          // When no links: Facebook uses original description + standard hashtags
+          facebookDescription = description + '\n\n#เล่าเรื่อง #คลิปไวรัล #reels #viralvideo';
+        }
+        
+        formData.append('description', facebookDescription);
+        formData.append('youtubeDescription', youtubeDescription);
+        formData.append('originalDescription', description);
         formData.append('schedulePost', schedulePost.toString());
         if (schedulePost && publishAt) {
           // Convert local time from input to UTC ISO string before sending
@@ -282,6 +311,10 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
             setVideoFile(null);
             setThumbnailFile(null);
             setDescription('');
+            setShopeeLink('');
+            setLazadaLink('');
+            setUseShopeeLink(false);
+            setUseLazadaLink(false);
             setSchedulePost(false);
             setPublishAt('');
             setThumbnailPreview(null);
@@ -296,18 +329,19 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
   // and hiding the flash of default state.
   return (
     <div className={isMounted ? 'fade-in' : 'hide-until-mounted'}>
-      <div className="status-bar">
-        <div className={`platform-status-container facebook-status ${facebookPage ? 'status-online' : 'status-offline'}`}>
-          <span className="platform-name">REELS</span>
-          {!facebookPage && <button onClick={handleFacebookConnect} className="connect-link">Connect</button>}
-        </div>
-        <div className="status-divider"></div>
-        <div className={`platform-status-container youtube-status ${youtubeChannel ? 'status-online' : 'status-offline'}`}>
-          <span className="platform-name">SHORTS</span>
-          {!youtubeChannel && <button onClick={handleYouTubeLogin} className="connect-link">Connect</button>}
-        </div>
-      </div>
       <div className="glass-container">
+        {/* Platform Status - Always at top */}
+        <div className="status-bar">
+          <div className={`platform-status-container facebook-status ${facebookPage ? 'status-online' : 'status-offline'}`}>
+            <span className="platform-name">REELS</span>
+            {!facebookPage && <button onClick={handleFacebookConnect} className="connect-link">Connect</button>}
+          </div>
+          <div className="status-divider"></div>
+          <div className={`platform-status-container youtube-status ${youtubeChannel ? 'status-online' : 'status-offline'}`}>
+            <span className="platform-name">SHORTS</span>
+            {!youtubeChannel && <button onClick={handleYouTubeLogin} className="connect-link">Connect</button>}
+          </div>
+        </div>
         {/* Upload Results - Above Form */}
         {uploadResults.length > 0 && (
           <div className="upload-results-top">
@@ -420,6 +454,58 @@ export default function UploadClient({ initialYoutubeChannel, initialFacebookPag
                         onChange={handleDescriptionChange}
                     ></textarea>
                     <div id="char-counter" className="char-counter">{description.length}/2200</div>
+                </div>
+
+                <div className="form-group">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                        <input 
+                            type="checkbox" 
+                            id="use-shopee"
+                            checked={useShopeeLink}
+                            onChange={(e) => setUseShopeeLink(e.target.checked)}
+                            style={{ width: '18px', height: '18px' }}
+                        />
+                        <label htmlFor="use-shopee" className="form-label" style={{ margin: 0 }}>🛒 Shopee Link</label>
+                    </div>
+                    <input 
+                        type="url" 
+                        className="form-input" 
+                        placeholder="https://shopee.co.th/..."
+                        value={shopeeLink}
+                        onChange={(e) => setShopeeLink(e.target.value)}
+                        disabled={!useShopeeLink}
+                        style={{ 
+                            minHeight: '44px',
+                            opacity: useShopeeLink ? 1 : 0.5,
+                            cursor: useShopeeLink ? 'text' : 'not-allowed'
+                        }}
+                    />
+                </div>
+
+                <div className="form-group">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                        <input 
+                            type="checkbox" 
+                            id="use-lazada"
+                            checked={useLazadaLink}
+                            onChange={(e) => setUseLazadaLink(e.target.checked)}
+                            style={{ width: '18px', height: '18px' }}
+                        />
+                        <label htmlFor="use-lazada" className="form-label" style={{ margin: 0 }}>🛍️ Lazada Link</label>
+                    </div>
+                    <input 
+                        type="url" 
+                        className="form-input" 
+                        placeholder="https://www.lazada.co.th/..."
+                        value={lazadaLink}
+                        onChange={(e) => setLazadaLink(e.target.value)}
+                        disabled={!useLazadaLink}
+                        style={{ 
+                            minHeight: '44px',
+                            opacity: useLazadaLink ? 1 : 0.5,
+                            cursor: useLazadaLink ? 'text' : 'not-allowed'
+                        }}
+                    />
                 </div>
 
                 <div className="form-group">

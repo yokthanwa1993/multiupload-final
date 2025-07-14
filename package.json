@@ -9,6 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@stagewise-plugins/react": "^0.5.2",
+    "@stagewise/toolbar-next": "^0.5.2",
     "firebase": "^11.10.0",
     "firebase-admin": "^13.4.0",
     "googleapis": "^150.0.1",
@@ -19,7 +21,6 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
     "@types/facebook-js-sdk": "^3.3.12",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -27,7 +28,6 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.5",
     "firebase-tools": "^14.9.0",
-    "tailwindcss": "^4",
     "typescript": "^5"
   }
 }

@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
 import AppInitializer from "./components/AppInitializer";
+import { StagewiseToolbar } from "@stagewise/toolbar-next";
+
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,6 +26,7 @@ export default function RootLayout({
             {children}
           </AppInitializer>
         </AuthProvider>
+        <StagewiseToolbar config={{ plugins: [] }} />
       </body>
     </html>
   );

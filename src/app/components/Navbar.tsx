@@ -4,6 +4,7 @@ import { useAuth } from '@/app/context/AuthContext';
 import { auth } from '@/app/lib/firebase';
 import { signOut } from 'firebase/auth';
 import Image from 'next/image';
+import Link from 'next/link';
 
 export default function Navbar() {
     const { user } = useAuth();
@@ -30,21 +31,28 @@ export default function Navbar() {
 
     return (
         <nav className="top-navbar">
-            <div className="user-info">
-                {user.photoURL && (
-                    <Image 
-                        src={user.photoURL} 
-                        alt={user.displayName || 'User Avatar'} 
-                        width={40} 
-                        height={40}
-                        className="user-avatar"
-                    />
-                )}
-                <span>{user.displayName || 'Welcome'}</span>
+            <div className="user-info-container">
+                <div className="user-info">
+                    {user.photoURL && (
+                        <Image 
+                            src={user.photoURL} 
+                            alt={user.displayName || 'User Avatar'} 
+                            width={40} 
+                            height={40}
+                            className="user-avatar"
+                        />
+                    )}
+                    <span>{user.displayName || 'Welcome'}</span>
+                </div>
             </div>
-            <button onClick={handleLogout} className="logout-button">
-                Logout
-            </button>
+            <div className="navbar-buttons">
+                <Link href="/history" className="logout-button">
+                    History
+                </Link>
+                <button onClick={handleLogout} className="logout-button">
+                    Logout
+                </button>
+            </div>
         </nav>
     );
 } 

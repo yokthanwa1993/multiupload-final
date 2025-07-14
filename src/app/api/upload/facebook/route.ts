@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/app/lib/firebase-admin';
 import { getToken } from '@/app/lib/realtimedb-tokens';
+import { savePostHistory } from '@/app/lib/realtimedb-history';
 
 async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
     const authorization = req.headers.get('Authorization');
@@ -32,21 +33,21 @@ async function getFacebookTokenData(uid: string) {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const uid = await getUserIdFromRequest(request);
-    if (!uid) {
-        return NextResponse.json({ error: 'Unauthorized user.' }, { status: 401 });
-    }
+  const uid = await getUserIdFromRequest(request);
+  if (!uid) {
+      return NextResponse.json({ error: 'Unauthorized user.' }, { status: 401 });
+  }
 
+  const formData = await request.formData();
+  const videoFile = formData.get('video') as File;
+  const thumbnailFile = formData.get('thumbnail') as File | null;
+  const description = formData.get('description') as string || '';
+  const schedulePost = formData.get('schedulePost') as string;
+  const publishAt = formData.get('publishAt') as string;
+
+  try {
     const { pageId, accessToken } = await getFacebookTokenData(uid);
     
-    const formData = await request.formData();
-    const videoFile = formData.get('video') as File;
-    const thumbnailFile = formData.get('thumbnail') as File | null;
-    const description = formData.get('description') as string || '';
-    const schedulePost = formData.get('schedulePost') as string;
-    const publishAt = formData.get('publishAt') as string;
-
     if (!videoFile) {
       return NextResponse.json({ error: 'Video file is required' }, { status: 400 });
     }
@@ -93,6 +94,14 @@ export async function POST(request: NextRequest) {
       scheduledTimestamp
     );
 
+    await savePostHistory(uid, {
+        platform: 'facebook',
+        status: isScheduled ? 'scheduled' : 'success',
+        videoTitle: description,
+        videoUrl: reelUrl,
+        postId: reelUrl.split('/').pop() || undefined
+    });
+
     return NextResponse.json({
       success: true,
       message: `Facebook Reels: ${isScheduled ? 'ตั้งเวลาสำเร็จ!' : 'อัปโหลดสำเร็จ!'} <a href="${reelUrl}" target="_blank">ดู Reel</a>`,
@@ -105,6 +114,15 @@ export async function POST(request: NextRequest) {
   } catch (_error) {
     console.error('Error in Facebook upload POST handler:', _error);
     const message = _error instanceof Error ? _error.message : 'Unknown error';
+    
+    // Save error to history
+    await savePostHistory(uid, {
+        platform: 'facebook',
+        status: 'error',
+        videoTitle: description,
+        errorMessage: message
+    });
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
